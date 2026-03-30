@@ -2,8 +2,11 @@ using System;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Forms;
+using ShinCapture.Capture;
+using ShinCapture.Helpers;
 using ShinCapture.Models;
 using ShinCapture.Services;
+using ShinCapture.Views.Overlay;
 
 namespace ShinCapture.Views;
 
@@ -55,7 +58,48 @@ public partial class MainWindow : Window
 
     private void StartCapture(CaptureMode mode)
     {
-        // Will be implemented in Task 6-7
+        ICaptureMode captureMode = mode switch
+        {
+            CaptureMode.Region => new RegionCaptureMode(),
+            CaptureMode.Fullscreen => new FullscreenCaptureMode(),
+            _ => new RegionCaptureMode() // placeholder for other modes
+        };
+
+        if (mode == CaptureMode.Fullscreen)
+        {
+            var bitmap = ScreenHelper.CaptureFullScreen();
+            var result = new CaptureResult
+            {
+                Image = bitmap,
+                Region = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height)
+            };
+            HandleCaptureResult(result);
+            return;
+        }
+
+        var overlay = new CaptureOverlay(_settings.Capture);
+        overlay.Closed += (_, _) =>
+        {
+            if (overlay.Result != null)
+                HandleCaptureResult(overlay.Result);
+        };
+        overlay.Start(captureMode);
+    }
+
+    private void HandleCaptureResult(CaptureResult result)
+    {
+        switch (_settings.Capture.AfterCapture)
+        {
+            case AfterCaptureAction.OpenEditor:
+                // EditorWindow will be created later
+                break;
+            case AfterCaptureAction.SaveDirectly:
+                // SaveManager will be used later
+                break;
+            case AfterCaptureAction.ClipboardOnly:
+                System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
+                break;
+        }
     }
 
     private ContextMenuStrip BuildTrayMenu()

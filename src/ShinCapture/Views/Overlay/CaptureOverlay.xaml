@@ -1,0 +1,87 @@
+<Window x:Class="ShinCapture.Views.Overlay.CaptureOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        Cursor="Cross"
+        ShowInTaskbar="False">
+
+    <Grid x:Name="RootGrid">
+
+        <!-- Frozen screen background -->
+        <Image x:Name="ScreenImage" Stretch="Fill" />
+
+        <!-- Global dim overlay (drawn partially by mode Render; this rect dims everything initially) -->
+        <Rectangle x:Name="DimOverlay"
+                   Fill="#55000000"
+                   IsHitTestVisible="False" />
+
+        <!-- Custom drawing canvas for mode-specific rendering -->
+        <Canvas x:Name="DrawCanvas" IsHitTestVisible="False" />
+
+        <!-- Crosshair lines -->
+        <Line x:Name="CrosshairH"
+              Stroke="#AAFFFFFF"
+              StrokeThickness="1"
+              IsHitTestVisible="False"
+              Visibility="Collapsed" />
+        <Line x:Name="CrosshairV"
+              Stroke="#AAFFFFFF"
+              StrokeThickness="1"
+              IsHitTestVisible="False"
+              Visibility="Collapsed" />
+
+        <!-- Magnifier panel -->
+        <Border x:Name="MagnifierBorder"
+                Width="200" Height="200"
+                BorderBrush="#CCFFFFFF"
+                BorderThickness="1"
+                CornerRadius="4"
+                Background="#EE000000"
+                Visibility="Collapsed">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Zoom preview -->
+                <Image x:Name="MagnifierImage"
+                       Grid.Row="0"
+                       Stretch="Fill"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor" />
+
+                <!-- Crosshair center mark -->
+                <Canvas Grid.Row="0" IsHitTestVisible="False">
+                    <Line Canvas.Left="0" Canvas.Top="100"
+                          X1="90" Y1="0" X2="110" Y2="0"
+                          Stroke="#FFFFFFFF" StrokeThickness="1" />
+                    <Line Canvas.Left="100" Canvas.Top="0"
+                          X1="0" Y1="90" X2="0" Y2="110"
+                          Stroke="#FFFFFFFF" StrokeThickness="1" />
+                </Canvas>
+
+                <!-- Info panel -->
+                <StackPanel Grid.Row="1"
+                            Background="#CC000000"
+                            Margin="0,2,0,0">
+                    <TextBlock x:Name="MagCoordText"
+                               Foreground="White"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               TextAlignment="Center"
+                               Margin="4,2" />
+                    <TextBlock x:Name="MagColorText"
+                               Foreground="White"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               TextAlignment="Center"
+                               Margin="4,0,4,2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>
