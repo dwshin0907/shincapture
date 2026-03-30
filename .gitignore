@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.superpowers/
+publish/
+개발일지/

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <AssemblyName>ShinCapture</AssemblyName>
+    <RootNamespace>ShinCapture</RootNamespace>
+    <Version>1.0.0</Version>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="2.88.*" />
+    <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.*" />
+    <PackageReference Include="System.Drawing.Common" Version="8.*" />
+  </ItemGroup>
+
+</Project>
