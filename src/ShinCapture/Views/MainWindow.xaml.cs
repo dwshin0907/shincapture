@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows;
 using System.Windows.Forms;
 using ShinCapture.Capture;
@@ -58,13 +59,6 @@ public partial class MainWindow : Window
 
     private void StartCapture(CaptureMode mode)
     {
-        ICaptureMode captureMode = mode switch
-        {
-            CaptureMode.Region => new RegionCaptureMode(),
-            CaptureMode.Fullscreen => new FullscreenCaptureMode(),
-            _ => new RegionCaptureMode() // placeholder for other modes
-        };
-
         if (mode == CaptureMode.Fullscreen)
         {
             var bitmap = ScreenHelper.CaptureFullScreen();
@@ -77,11 +71,36 @@ public partial class MainWindow : Window
             return;
         }
 
+        ICaptureMode captureMode = mode switch
+        {
+            CaptureMode.Region    => new RegionCaptureMode(),
+            CaptureMode.Freeform  => new FreeformCaptureMode(),
+            CaptureMode.Window    => new WindowCaptureMode(),
+            CaptureMode.Element   => new ElementCaptureMode(),
+            CaptureMode.Fullscreen => new FullscreenCaptureMode(),
+            CaptureMode.Scroll    => new ScrollCaptureMode(),
+            CaptureMode.FixedSize => new FixedSizeCaptureMode(
+                _settings.FixedSizes?.FirstOrDefault()?.Width  ?? 1280,
+                _settings.FixedSizes?.FirstOrDefault()?.Height ?? 720),
+            _ => new RegionCaptureMode()
+        };
+
         var overlay = new CaptureOverlay(_settings.Capture);
         overlay.Closed += (_, _) =>
         {
             if (overlay.Result != null)
+            {
                 HandleCaptureResult(overlay.Result);
+            }
+            else if (captureMode is ScrollCaptureMode scrollMode
+                     && scrollMode.GetStitchedBitmap() is { } stitched)
+            {
+                HandleCaptureResult(new CaptureResult
+                {
+                    Image  = stitched,
+                    Region = new System.Drawing.Rectangle(0, 0, stitched.Width, stitched.Height)
+                });
+            }
         };
         overlay.Start(captureMode);
     }
