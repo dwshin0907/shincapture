@@ -16,12 +16,14 @@ public partial class MainWindow : Window
     private readonly NotifyIcon _trayIcon;
     private readonly HotkeyManager _hotkeyManager;
     private readonly SettingsManager _settingsManager;
+    private readonly SaveManager _saveManager;
     private AppSettings _settings;
 
-    public MainWindow(SettingsManager settingsManager)
+    public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
         InitializeComponent();
         _settingsManager = settingsManager;
+        _saveManager = saveManager;
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
 
@@ -110,10 +112,11 @@ public partial class MainWindow : Window
         switch (_settings.Capture.AfterCapture)
         {
             case AfterCaptureAction.OpenEditor:
-                // EditorWindow will be created later
+                var editor = new EditorWindow(result.Image, _saveManager, _settings);
+                editor.Show();
                 break;
             case AfterCaptureAction.SaveDirectly:
-                // SaveManager will be used later
+                var savedPath = _saveManager.SaveAuto(result.Image, _settings);
                 break;
             case AfterCaptureAction.ClipboardOnly:
                 System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));

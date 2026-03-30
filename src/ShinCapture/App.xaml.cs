@@ -12,6 +12,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         var settingsManager = new SettingsManager();
-        _mainWindow = new AppMainWindow(settingsManager);
+        var saveManager = new SaveManager();
+        _mainWindow = new AppMainWindow(settingsManager, saveManager);
     }
 }
