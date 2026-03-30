@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     {
         _hotkeyManager.Initialize(this);
         RegisterHotkeys();
+        PopulateCaptureGrid();
     }
 
     private void RegisterHotkeys()
@@ -163,8 +164,80 @@ public partial class MainWindow : Window
         System.Diagnostics.Process.Start("explorer.exe", path);
     }
 
-    private void OpenSettings() { /* Task 20 */ }
+    private void OpenSettings()
+    {
+        var window = new SettingsWindow(_settingsManager);
+        window.Owner = this;
+        window.ShowDialog();
+        // Reload settings and re-register hotkeys
+        _settings = _settingsManager.Load();
+        RegisterHotkeys();
+    }
+
     private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
+
+    private void PopulateCaptureGrid()
+    {
+        CaptureModesPanel.Items.Clear();
+        var modes = new (string icon, string name, string shortcut, CaptureMode mode)[]
+        {
+            ("✏", "영역지정", "PrtSc",        CaptureMode.Region),
+            ("✧", "자유형",   "Ctrl+Shift+F", CaptureMode.Freeform),
+            ("☐", "창 캡쳐",  "Ctrl+Shift+W", CaptureMode.Window),
+            ("◫", "단위영역", "Ctrl+Shift+D", CaptureMode.Element),
+            ("⊡", "전체화면", "Ctrl+Shift+A", CaptureMode.Fullscreen),
+            ("↕", "스크롤",   "Ctrl+Shift+S", CaptureMode.Scroll),
+            ("⊞", "지정사이즈", "Ctrl+Shift+Z", CaptureMode.FixedSize),
+        };
+
+        foreach (var (icon, name, shortcut, captureMode) in modes)
+        {
+            var iconBlock = new System.Windows.Controls.TextBlock
+            {
+                Text = icon,
+                FontSize = 18,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            var nameBlock = new System.Windows.Controls.TextBlock
+            {
+                Text = name,
+                FontSize = 11,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryBrush")
+            };
+            var shortcutBlock = new System.Windows.Controls.TextBlock
+            {
+                Text = shortcut,
+                FontSize = 10,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextDisabledBrush")
+            };
+
+            var stack = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Vertical,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+            };
+            stack.Children.Add(iconBlock);
+            stack.Children.Add(nameBlock);
+            stack.Children.Add(shortcutBlock);
+
+            var btn = new System.Windows.Controls.Button
+            {
+                Content = stack,
+                Padding = new Thickness(4, 8, 4, 8),
+                Margin = new Thickness(3),
+                BorderThickness = new Thickness(1),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("BorderBrush"),
+                Background = (System.Windows.Media.Brush)FindResource("BackgroundSecondaryBrush"),
+                Cursor = System.Windows.Input.Cursors.Hand,
+            };
+            var localMode = captureMode;
+            btn.Click += (_, _) => StartCapture(localMode);
+            CaptureModesPanel.Items.Add(btn);
+        }
+    }
 
     private void ExitApplication()
     {

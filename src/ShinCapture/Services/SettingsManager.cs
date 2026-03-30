@@ -21,8 +21,18 @@ public class SettingsManager
 
     public SettingsManager(string? settingsDir = null)
     {
-        _settingsDir = settingsDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShinCapture");
+        if (settingsDir != null)
+        {
+            _settingsDir = settingsDir;
+        }
+        else
+        {
+            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            var portableMarker = Path.Combine(exeDir, "portable.txt");
+            _settingsDir = File.Exists(portableMarker)
+                ? Path.Combine(exeDir, "config")
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShinCapture");
+        }
         _filePath = Path.Combine(_settingsDir, "settings.json");
     }
 
