@@ -33,8 +33,8 @@ public class BalloonTool : ToolBase
         set
         {
             base.CurrentColor = value;
-            if (_creating != null) _creating.BorderColor = TextBorderColor ?? value;
-            if (_textBox != null) { _textBox.BorderBrush = new SolidColorBrush(TextBorderColor ?? value); _textBox.Focus(); }
+            if (_creating != null) _creating.TextColor = value;
+            if (_textBox != null) { _textBox.Foreground = new SolidColorBrush(value); _textBox.Focus(); }
         }
     }
     public override double CurrentFontSize
@@ -155,7 +155,8 @@ public class BalloonTool : ToolBase
             Position = position,
             TailTarget = new Point(position.X + 40, position.Y + 80),
             FillColor = TextFillColor ?? Colors.White,
-            BorderColor = TextBorderColor ?? CurrentColor,
+            BorderColor = TextBorderColor ?? Colors.Black,
+            TextColor = CurrentColor,
             BalloonStyle = BalloonStyle,
             FontName = CurrentFontName,
             Text = ""
@@ -219,7 +220,7 @@ public class BalloonTool : ToolBase
         _textBox = new TextBox
         {
             Background = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)),
-            Foreground = Brushes.Black,
+            Foreground = new SolidColorBrush(CurrentColor),
             BorderBrush = new SolidColorBrush(CurrentColor),
             BorderThickness = new Thickness(1.5),
             FontFamily = new FontFamily(CurrentFontName),
@@ -265,6 +266,7 @@ public class BalloonTool : ToolBase
             _creating.Text = text;
             _creating.FontName = CurrentFontName;
             _creating.FontSize = CurrentFontSize;
+            _creating.TextColor = CurrentColor;
 
             // 본체 크기 기준으로 꼬다리 설정: 폭 15%, 높이 30% 바깥으로
             var body = _creating.GetBodyRect();

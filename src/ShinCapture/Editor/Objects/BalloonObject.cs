@@ -21,6 +21,7 @@ public class BalloonObject : EditorObject
     public BalloonStyle BalloonStyle { get; set; } = BalloonStyle.Rounded;
     public string FontName { get; set; } = "Pretendard";
     public double FontSize { get; set; } = 14.0;
+    public Color TextColor { get; set; } = Colors.Black;
     public double TailWidth { get; set; } = 14.0;
 
     private const double PaddingH = 16.0;
@@ -52,7 +53,7 @@ public class BalloonObject : EditorObject
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var ft = BuildFormattedText(Colors.Black);
+            var ft = BuildFormattedText(TextColor);
             w = Math.Max(MinWidth, ft.Width + PaddingH * 2);
             h = Math.Max(MinHeight, ft.Height + PaddingV * 2);
         }
@@ -142,7 +143,7 @@ public class BalloonObject : EditorObject
         // 텍스트
         if (!string.IsNullOrEmpty(Text))
         {
-            var ft = BuildFormattedText(Colors.Black);
+            var ft = BuildFormattedText(TextColor);
             var textPos = new Point(
                 body.X + PaddingH,
                 body.Y + (body.Height - ft.Height) / 2.0);
@@ -276,6 +277,7 @@ public class BalloonObject : EditorObject
             BalloonStyle = BalloonStyle,
             FontName = FontName,
             FontSize = FontSize,
+            TextColor = TextColor,
             IsSelected = IsSelected,
             IsVisible = IsVisible
         };
