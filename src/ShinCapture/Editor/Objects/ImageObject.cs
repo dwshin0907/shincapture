@@ -26,6 +26,20 @@ public class ImageObject : EditorObject
         return Bounds.Contains(point);
     }
 
+    public override void Scale(double factor, Point anchor)
+    {
+        Position = new Point(
+            anchor.X + (Position.X - anchor.X) * factor,
+            anchor.Y + (Position.Y - anchor.Y) * factor);
+        Width = Math.Max(4, Width * factor);
+        Height = Math.Max(4, Height * factor);
+    }
+
+    public override void Move(Vector delta)
+    {
+        Position = new Point(Position.X + delta.X, Position.Y + delta.Y);
+    }
+
     public override EditorObject Clone()
     {
         return new ImageObject

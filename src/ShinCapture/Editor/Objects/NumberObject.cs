@@ -9,7 +9,7 @@ public class NumberObject : EditorObject
 {
     public int Number { get; set; } = 1;
     public Point Center { get; set; }
-    public Color CircleColor { get; set; } = Colors.Red;
+    public Color CircleColor { get; set; } = Colors.Black;
     public double Radius { get; set; } = 14.0;
 
     public override Rect Bounds =>
@@ -51,6 +51,19 @@ public class NumberObject : EditorObject
         double dx = point.X - Center.X;
         double dy = point.Y - Center.Y;
         return dx * dx + dy * dy <= (Radius + 4.0) * (Radius + 4.0);
+    }
+
+    public override void Scale(double factor, Point anchor)
+    {
+        Center = new Point(
+            anchor.X + (Center.X - anchor.X) * factor,
+            anchor.Y + (Center.Y - anchor.Y) * factor);
+        Radius = Math.Max(6, Radius * factor);
+    }
+
+    public override void Move(Vector delta)
+    {
+        Center = new Point(Center.X + delta.X, Center.Y + delta.Y);
     }
 
     public override EditorObject Clone()

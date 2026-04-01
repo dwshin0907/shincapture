@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -10,6 +11,7 @@ public class CropTool : ToolBase
 {
     private BitmapSource? _sourceImage;
     private readonly Action<BitmapSource> _setImage;
+    private readonly List<EditorObject> _objects;
     private Point _start;
     private Point _end;
     private bool _isDrawing;
@@ -17,10 +19,11 @@ public class CropTool : ToolBase
     public override string Name => "Crop";
     public override string Icon => "✂️";
 
-    public CropTool(BitmapSource? sourceImage, Action<BitmapSource> setImage)
+    public CropTool(BitmapSource? sourceImage, Action<BitmapSource> setImage, List<EditorObject> objects)
     {
         _sourceImage = sourceImage;
         _setImage = setImage;
+        _objects = objects;
     }
 
     public void SetSourceImage(BitmapSource? source) => _sourceImage = source;
@@ -71,7 +74,7 @@ public class CropTool : ToolBase
         if (w <= 0 || h <= 0) return null;
 
         var cropRect = new Int32Rect(x, y, w, h);
-        return new CropCommand(_sourceImage, cropRect, _setImage);
+        return new CropCommand(_sourceImage, cropRect, _setImage, _objects);
     }
 
     public override void RenderPreview(DrawingContext dc)

@@ -13,6 +13,7 @@ public class StrokeObject : EditorObject
     public double StrokeWidth { get; set; } = 3.0;
     public double Opacity { get; set; } = 1.0;
     public bool IsHighlighter { get; set; } = false;
+    public List<Color>? GradientColors { get; set; }
 
     public override Rect Bounds
     {
@@ -37,6 +38,13 @@ public class StrokeObject : EditorObject
     {
         if (Points.Count < 2) return;
 
+        // 그라데이션 모드: 세그먼트별로 색상 보간
+        if (GradientColors != null && GradientColors.Count >= 2)
+        {
+            RenderGradient(dc);
+            return;
+        }
+
         var color = IsHighlighter
             ? Color.FromArgb((byte)(128 * Opacity), StrokeColor.R, StrokeColor.G, StrokeColor.B)
             : Color.FromArgb((byte)(255 * Opacity), StrokeColor.R, StrokeColor.G, StrokeColor.B);
@@ -60,6 +68,47 @@ public class StrokeObject : EditorObject
         dc.DrawGeometry(null, pen, geometry);
     }
 
+    private void RenderGradient(DrawingContext dc)
+    {
+        var colors = GradientColors!;
+        byte a = IsHighlighter ? (byte)(128 * Opacity) : (byte)(255 * Opacity);
+
+        // 전체 경로를 하나의 지오메트리로 생성
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(Points[0], false, false);
+            ctx.PolyLineTo(Points.Skip(1).ToList(), true, true);
+        }
+        geometry.Freeze();
+
+        // 시작점→끝점 방향으로 그라데이션 브러시 적용
+        var gradBrush = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = Points[0],
+            EndPoint = Points[Points.Count - 1]
+        };
+        for (int i = 0; i < colors.Count; i++)
+        {
+            var c = colors[i];
+            gradBrush.GradientStops.Add(new GradientStop(
+                Color.FromArgb(a, c.R, c.G, c.B),
+                (double)i / (colors.Count - 1)));
+        }
+        gradBrush.Freeze();
+
+        var pen = new Pen(gradBrush, StrokeWidth)
+        {
+            StartLineCap = PenLineCap.Round,
+            EndLineCap = PenLineCap.Round,
+            LineJoin = PenLineJoin.Round
+        };
+        pen.Freeze();
+
+        dc.DrawGeometry(null, pen, geometry);
+    }
+
     public override bool HitTest(Point point)
     {
         double threshold = StrokeWidth + 5.0;
@@ -73,6 +122,24 @@ public class StrokeObject : EditorObject
         return false;
     }
 
+    public override void Scale(double factor, Point anchor)
+    {
+        for (int i = 0; i < Points.Count; i++)
+        {
+            var p = Points[i];
+            Points[i] = new Point(
+                anchor.X + (p.X - anchor.X) * factor,
+                anchor.Y + (p.Y - anchor.Y) * factor);
+        }
+        StrokeWidth = Math.Max(0.5, StrokeWidth * factor);
+    }
+
+    public override void Move(Vector delta)
+    {
+        for (int i = 0; i < Points.Count; i++)
+            Points[i] = new Point(Points[i].X + delta.X, Points[i].Y + delta.Y);
+    }
+
     public override EditorObject Clone()
     {
         return new StrokeObject
@@ -82,6 +149,7 @@ public class StrokeObject : EditorObject
             StrokeWidth = StrokeWidth,
             Opacity = Opacity,
             IsHighlighter = IsHighlighter,
+            GradientColors = GradientColors != null ? new List<Color>(GradientColors) : null,
             IsSelected = IsSelected,
             IsVisible = IsVisible
         };

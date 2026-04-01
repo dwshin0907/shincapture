@@ -12,19 +12,32 @@ namespace ShinCapture.Editor;
 public class EditorCanvas : Canvas
 {
     private BitmapSource? _backgroundImage;
-    private readonly List<EditorObject> _objects = new();
+    private List<EditorObject> _objects = new();
     private ITool? _currentTool;
     private bool _isInteracting;
 
     private double _zoom = 1.0;
-    private Vector _pan;
+    private const double Padding = 20;
+
+    // 중클릭 팬 (ScrollViewer 오프셋 조절)
     private Point _panStart;
     private bool _isPanning;
+
+    // 개체 드래그 이동
+    private EditorObject? _draggingObject;
+    private Point _dragLastPos;
 
     public double Zoom
     {
         get => _zoom;
-        set { _zoom = Math.Clamp(value, 0.25, 4.0); InvalidateVisual(); ZoomChanged?.Invoke(this, _zoom); }
+        set
+        {
+            _zoom = Math.Clamp(value, 0.1, 8.0);
+            UpdateCanvasSize();
+            InvalidateVisual();
+            var dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            ZoomChanged?.Invoke(this, _zoom * dpiScale);
+        }
     }
 
     public event EventHandler<double>? ZoomChanged;
@@ -33,39 +46,84 @@ public class EditorCanvas : Canvas
     public BitmapSource? BackgroundImage
     {
         get => _backgroundImage;
-        set { _backgroundImage = value; FitToView(); InvalidateVisual(); }
+        set { _backgroundImage = value; FitToView(); }
     }
 
-    public List<EditorObject> Objects => _objects;
+    public List<EditorObject> Objects { get => _objects; set => _objects = value; }
     public void SetTool(ITool? tool) => _currentTool = tool;
+
+    public void SubmitExternalCommand(IEditorCommand cmd)
+    {
+        CommandRequested?.Invoke(this, cmd);
+        InvalidateVisual();
+    }
+
+    private ScrollViewer? GetScrollViewer()
+    {
+        var parent = VisualTreeHelper.GetParent(this);
+        while (parent != null)
+        {
+            if (parent is ScrollViewer sv) return sv;
+            parent = VisualTreeHelper.GetParent(parent);
+        }
+        return null;
+    }
+
+    private void UpdateCanvasSize()
+    {
+        if (_backgroundImage == null) return;
+        Width = _backgroundImage.PixelWidth * _zoom + Padding * 2;
+        Height = _backgroundImage.PixelHeight * _zoom + Padding * 2;
+    }
 
     public void FitToView()
     {
-        if (_backgroundImage == null || ActualWidth == 0) return;
-        var zoomW = ActualWidth / _backgroundImage.PixelWidth;
-        var zoomH = ActualHeight / _backgroundImage.PixelHeight;
-        _zoom = Math.Min(zoomW, zoomH) * 0.9;
-        _pan = new Vector(
-            (ActualWidth - _backgroundImage.PixelWidth * _zoom) / 2,
-            (ActualHeight - _backgroundImage.PixelHeight * _zoom) / 2);
+        if (_backgroundImage == null) return;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double dpiScale = dpi.PixelsPerDip;
+
+        var sv = GetScrollViewer();
+        double viewW = sv?.ViewportWidth ?? ActualWidth;
+        double viewH = sv?.ViewportHeight ?? ActualHeight;
+        if (viewW <= 0 || viewH <= 0)
+        {
+            // 아직 레이아웃 전 — 기본 100%
+            _zoom = 1.0 / dpiScale;
+            UpdateCanvasSize();
+            InvalidateVisual();
+            ZoomChanged?.Invoke(this, _zoom * dpiScale);
+            return;
+        }
+
+        // 뷰포트에 맞는 줌 계산
+        double zoomW = (viewW - Padding * 2) / _backgroundImage.PixelWidth;
+        double zoomH = (viewH - Padding * 2) / _backgroundImage.PixelHeight;
+        double fitZoom = Math.Min(zoomW, zoomH);
+
+        // 100% 이하로만 축소 (100%보다 작은 이미지는 100%로)
+        double zoom100 = 1.0 / dpiScale;
+        _zoom = Math.Min(fitZoom, zoom100);
+
+        UpdateCanvasSize();
         InvalidateVisual();
+        ZoomChanged?.Invoke(this, _zoom * dpiScale);
     }
 
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        // Draw canvas background using theme resource
         var bgBrush = TryFindResource("BackgroundCanvasBrush") as Brush ?? Brushes.LightGray;
         dc.DrawRectangle(bgBrush, null, new Rect(0, 0, ActualWidth, ActualHeight));
 
-        dc.PushTransform(new TranslateTransform(_pan.X, _pan.Y));
+        dc.PushTransform(new TranslateTransform(Padding, Padding));
         dc.PushTransform(new ScaleTransform(_zoom, _zoom));
 
         if (_backgroundImage != null)
             dc.DrawImage(_backgroundImage, new Rect(0, 0, _backgroundImage.PixelWidth, _backgroundImage.PixelHeight));
 
         foreach (var obj in _objects.Where(o => o.IsVisible))
-            obj.Render(dc);
+            obj.RenderWithTransform(dc);
 
         _currentTool?.RenderPreview(dc);
 
@@ -76,34 +134,87 @@ public class EditorCanvas : Canvas
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
+        Focus();
+        var imgPos = ScreenToImage(e.GetPosition(this));
+
+        // 중클릭: ScrollViewer 팬
         if (e.MiddleButton == MouseButtonState.Pressed)
         {
-            _isPanning = true; _panStart = e.GetPosition(this); CaptureMouse(); return;
+            _isPanning = true;
+            _panStart = e.GetPosition(GetScrollViewer() ?? (IInputElement)this);
+            CaptureMouse();
+            return;
         }
+
+        // 우클릭: 개체 드래그 이동
+        if (e.RightButton == MouseButtonState.Pressed)
+        {
+            var hit = HitTestObjects(imgPos);
+            if (hit != null)
+            {
+                _draggingObject = hit;
+                _dragLastPos = imgPos;
+                CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // 좌클릭: 도구 동작
         _isInteracting = true;
-        _currentTool?.OnMouseDown(ScreenToImage(e.GetPosition(this)), e);
+        _currentTool?.OnMouseDown(imgPos, e);
         InvalidateVisual();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        var imgPos = ScreenToImage(e.GetPosition(this));
+
         if (_isPanning)
         {
-            var current = e.GetPosition(this);
-            _pan += current - _panStart; _panStart = current; InvalidateVisual(); return;
+            var sv = GetScrollViewer();
+            if (sv != null)
+            {
+                var current = e.GetPosition(sv);
+                var delta = current - _panStart;
+                sv.ScrollToHorizontalOffset(sv.HorizontalOffset - delta.X);
+                sv.ScrollToVerticalOffset(sv.VerticalOffset - delta.Y);
+                _panStart = current;
+            }
+            return;
         }
-        if (_isInteracting)
+
+        if (_draggingObject != null)
         {
-            _currentTool?.OnMouseMove(ScreenToImage(e.GetPosition(this)), e);
+            var delta = imgPos - _dragLastPos;
+            _draggingObject.Move(delta);
+            _dragLastPos = imgPos;
             InvalidateVisual();
+            return;
         }
+
+        _currentTool?.OnMouseMove(imgPos, e);
+        if (_isInteracting)
+            InvalidateVisual();
+
+        Cursor = _currentTool?.RequestedCursor;
     }
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
+
         if (_isPanning) { _isPanning = false; ReleaseMouseCapture(); return; }
+
+        if (_draggingObject != null)
+        {
+            _draggingObject = null;
+            ReleaseMouseCapture();
+            InvalidateVisual();
+            return;
+        }
+
         if (_isInteracting)
         {
             _isInteracting = false;
@@ -117,9 +228,33 @@ public class EditorCanvas : Canvas
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        Zoom *= e.Delta > 0 ? 1.1 : 0.9;
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+
+        double newZoom = _zoom * (e.Delta > 0 ? 1.1 : 0.9);
+
+        var dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        double zoom100 = 1.0 / dpiScale;
+        double ratio = newZoom / zoom100;
+        if (ratio > 0.98 && ratio < 1.02)
+            newZoom = zoom100;
+
+        Zoom = newZoom;
+        e.Handled = true;
+    }
+
+    private EditorObject? HitTestObjects(Point imagePos)
+    {
+        for (int i = _objects.Count - 1; i >= 0; i--)
+        {
+            if (_objects[i].IsVisible && _objects[i].HitTestWithTransform(imagePos))
+                return _objects[i];
+        }
+        return null;
     }
 
     private Point ScreenToImage(Point screenPoint) =>
-        new((screenPoint.X - _pan.X) / _zoom, (screenPoint.Y - _pan.Y) / _zoom);
+        new((screenPoint.X - Padding) / _zoom, (screenPoint.Y - Padding) / _zoom);
+
+    public Point ImageToScreen(Point imagePoint) =>
+        new(imagePoint.X * _zoom + Padding, imagePoint.Y * _zoom + Padding);
 }

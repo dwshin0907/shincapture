@@ -8,9 +8,16 @@ public abstract class ToolBase : ITool
 {
     public abstract string Name { get; }
     public abstract string Icon { get; }
-    public Color CurrentColor { get; set; } = Colors.Red;
-    public double CurrentWidth { get; set; } = 3;
+    public virtual Cursor? RequestedCursor => null;
+    public virtual Color CurrentColor { get; set; } = Colors.Black;
+    public virtual double CurrentWidth { get; set; } = 3;
     public double CurrentOpacity { get; set; } = 1.0;
+    public virtual string CurrentFontName { get; set; } = "Paperlogy 5";
+    public virtual double CurrentFontSize { get; set; } = 40;
+    public virtual bool GlassBackground { get; set; } = false;
+    public virtual bool Bold { get; set; } = false;
+    public virtual Color? TextFillColor { get; set; }
+    public virtual Color? TextBorderColor { get; set; }
 
     public abstract void OnMouseDown(Point position, MouseButtonEventArgs e);
     public abstract void OnMouseMove(Point position, MouseEventArgs e);

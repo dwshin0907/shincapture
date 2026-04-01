@@ -76,6 +76,18 @@ public class MosaicObject : EditorObject
         return Region.Contains(point);
     }
 
+    public override void Scale(double factor, Point anchor)
+    {
+        double x = anchor.X + (Region.X - anchor.X) * factor;
+        double y = anchor.Y + (Region.Y - anchor.Y) * factor;
+        Region = new Rect(x, y, Region.Width * factor, Region.Height * factor);
+    }
+
+    public override void Move(Vector delta)
+    {
+        Region = new Rect(Region.X + delta.X, Region.Y + delta.Y, Region.Width, Region.Height);
+    }
+
     public override EditorObject Clone()
     {
         return new MosaicObject

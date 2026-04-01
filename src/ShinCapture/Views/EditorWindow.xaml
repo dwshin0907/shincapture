@@ -19,35 +19,100 @@
         <Border Grid.Row="0" Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
                 Padding="{DynamicResource ToolbarPadding}">
-            <WrapPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
+            <DockPanel>
+                <Border x:Name="BannerArea" DockPanel.Dock="Right" Margin="8,0,0,0"/>
+                <WrapPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
+            </DockPanel>
         </Border>
 
-        <!-- Property SubBar -->
-        <Border Grid.Row="1" Background="{DynamicResource BackgroundTertiaryBrush}"
+        <!-- Context Property Bar -->
+        <Border Grid.Row="1" x:Name="PropertyBorder"
+                Background="{DynamicResource BackgroundTertiaryBrush}"
                 BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1"
-                Padding="6,5">
-            <StackPanel x:Name="PropertyPanel" Orientation="Horizontal"/>
+                Padding="6,4">
+            <StackPanel>
+                <WrapPanel x:Name="PropertyPanel" Orientation="Horizontal"/>
+                <WrapPanel x:Name="SubOptionPanel" Orientation="Horizontal" Margin="0,3,0,0"/>
+            </StackPanel>
         </Border>
 
-        <!-- Editor Canvas -->
-        <editor:EditorCanvas Grid.Row="2" x:Name="Canvas" ClipToBounds="True"/>
+        <!-- Canvas + History Panel -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Editor Canvas with Scrollbars -->
+            <ScrollViewer Grid.Column="0" x:Name="CanvasScroller"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          Focusable="False"
+                          PanningMode="Both">
+                <editor:EditorCanvas x:Name="Canvas" ClipToBounds="True" Focusable="True"/>
+            </ScrollViewer>
+
+            <!-- History Panel -->
+            <Border Grid.Column="1" Width="140"
+                    Background="{DynamicResource BackgroundSecondaryBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <!-- Header (제목 + 버튼) -->
+                    <Border DockPanel.Dock="Top" Padding="6,4"
+                            BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <TextBlock Text="캡쳐 기록" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="HistorySaveAllBtn" Content="저장" Padding="6,2"
+                                        Style="{DynamicResource SmallButton}" Click="OnHistorySaveAll"/>
+                                <Button x:Name="HistoryClearBtn" Content="비움" Padding="6,2" Margin="3,0,0,0"
+                                        Style="{DynamicResource SmallButton}" Click="OnHistoryClear"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <!-- 미니 배너 -->
+                    <Border DockPanel.Dock="Top" Padding="6,3" Cursor="Hand"
+                            Background="#F0F7FF" BorderBrush="#E0EAFF" BorderThickness="0,0,0,1"
+                            x:Name="HistoryBanner" MouseDown="OnHistoryBannerClick"
+                            ToolTip="AI 실전 활용법 채널 방문">
+                        <TextBlock Text="AI강의 보러가기 >" FontSize="10" Foreground="#0066CC"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Thumbnails -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="HistoryPanel" Orientation="Vertical" Margin="4"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
 
         <!-- Status Bar -->
         <Border Grid.Row="3" Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
-                Padding="14,8">
+                Padding="10,5">
             <DockPanel>
                 <TextBlock x:Name="StatusText" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            FontSize="{DynamicResource FontSizeSmall}"/>
+                <TextBlock x:Name="ZoomText" VerticalAlignment="Center" Text="100%"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           FontSize="{DynamicResource FontSizeSmall}" Margin="12,0,0,0"/>
+                <!-- 마이크로 홍보 -->
+                <TextBlock x:Name="MicroAd" VerticalAlignment="Center" Margin="16,0,0,0"
+                           FontSize="10" Cursor="Hand" Foreground="#9CA3AF"
+                           MouseDown="OnMicroAdClick"
+                           ToolTip="popolong@naver.com">
+                    <TextBlock.Text>문의/제휴</TextBlock.Text>
+                </TextBlock>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="CopyBtn" Content="복사" Margin="0,0,8,0"
-                            Padding="18,6" Click="OnCopyClick"/>
-                    <Button x:Name="SaveAsBtn" Content="다른 이름으로 저장" Margin="0,0,8,0"
-                            Padding="18,6" Click="OnSaveAsClick"/>
-                    <Button x:Name="SaveBtn" Content="저장" Padding="24,6"
-                            Click="OnSaveClick"
-                            Background="{DynamicResource AccentBrush}" Foreground="White"/>
+                    <Button x:Name="CopyBtn" Content="복사" Margin="0,0,4,0"
+                            Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnCopyClick"/>
+                    <Button x:Name="SaveAsBtn" Content="다른이름저장" Margin="0,0,4,0"
+                            Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnSaveAsClick"/>
+                    <Button x:Name="SaveBtn" Content="저장"
+                            Style="{DynamicResource AccentButton}" Padding="16,5" Click="OnSaveClick"/>
                 </StackPanel>
             </DockPanel>
         </Border>

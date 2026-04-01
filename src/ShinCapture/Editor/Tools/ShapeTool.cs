@@ -21,6 +21,8 @@ public class ShapeTool : ToolBase
     public ShapeTool(List<EditorObject> objects)
     {
         _objects = objects;
+        CurrentColor = Colors.Black;
+        CurrentWidth = 9.9;
     }
 
     public override void OnMouseDown(Point position, MouseButtonEventArgs e)

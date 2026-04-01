@@ -6,3 +6,11 @@ obj/
 .superpowers/
 publish/
 개발일지/
+
+dist/
+publish/
+publish_new/
+*.exe
+스크린샷/
+*.png
+startup_error.log

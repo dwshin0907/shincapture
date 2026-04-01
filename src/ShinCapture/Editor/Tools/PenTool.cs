@@ -18,6 +18,7 @@ public class PenTool : ToolBase
     public PenTool(List<EditorObject> objects)
     {
         _objects = objects;
+        CurrentWidth = 9.9;
     }
 
     public override void OnMouseDown(Point position, MouseButtonEventArgs e)

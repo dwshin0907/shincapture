@@ -7,22 +7,22 @@
     <Color x:Key="AccentHoverColor">#106EBE</Color>
     <Color x:Key="AccentPressedColor">#005A9E</Color>
 
-    <Color x:Key="BackgroundPrimaryColor">#F3F3F3</Color>
-    <Color x:Key="BackgroundSecondaryColor">#FBFBFB</Color>
-    <Color x:Key="BackgroundTertiaryColor">#F7F7F7</Color>
-    <Color x:Key="BackgroundCanvasColor">#E8E8E8</Color>
+    <Color x:Key="BackgroundPrimaryColor">#FFFFFF</Color>
+    <Color x:Key="BackgroundSecondaryColor">#F5F5F5</Color>
+    <Color x:Key="BackgroundTertiaryColor">#EEEEEE</Color>
+    <Color x:Key="BackgroundCanvasColor">#E0E0E0</Color>
 
-    <Color x:Key="TextPrimaryColor">#191919</Color>
-    <Color x:Key="TextSecondaryColor">#555555</Color>
-    <Color x:Key="TextDisabledColor">#CCCCCC</Color>
+    <Color x:Key="TextPrimaryColor">#1A1A1A</Color>
+    <Color x:Key="TextSecondaryColor">#5F6368</Color>
+    <Color x:Key="TextDisabledColor">#BDBDBD</Color>
 
-    <Color x:Key="BorderColor">#E5E5E5</Color>
-    <Color x:Key="BorderLightColor">#EBEBEB</Color>
+    <Color x:Key="BorderColor">#DADCE0</Color>
+    <Color x:Key="BorderLightColor">#E8EAED</Color>
     <Color x:Key="DividerColor">#E0E0E0</Color>
 
-    <Color x:Key="ToolbarButtonHoverColor">#F0F0F0</Color>
-    <Color x:Key="ToolbarButtonActiveColor">#E8E8E8</Color>
-    <Color x:Key="ToolbarButtonActiveBorderColor">#D0D0D0</Color>
+    <Color x:Key="ToolbarButtonHoverColor">#E8E8E8</Color>
+    <Color x:Key="ToolbarButtonActiveColor">#DEE1E6</Color>
+    <Color x:Key="ToolbarButtonActiveBorderColor">#C4C7CC</Color>
 
     <Color x:Key="ErrorColor">#C42B1C</Color>
 
@@ -54,23 +54,186 @@
     <CornerRadius x:Key="PanelCornerRadius">8</CornerRadius>
     <CornerRadius x:Key="WindowCornerRadius">8</CornerRadius>
 
-    <Thickness x:Key="ToolbarPadding">6,6,6,6</Thickness>
-    <Thickness x:Key="ToolbarButtonPadding">6,6,6,6</Thickness>
-    <system:Double x:Key="ToolbarButtonMinWidth">40</system:Double>
-    <system:Double x:Key="ToolbarGroupSpacing">12</system:Double>
+    <Thickness x:Key="ToolbarPadding">4,3,4,3</Thickness>
+    <Thickness x:Key="ToolbarButtonPadding">8,6,8,6</Thickness>
+    <system:Double x:Key="ToolbarButtonMinWidth">36</system:Double>
+    <system:Double x:Key="ToolbarGroupSpacing">8</system:Double>
 
     <!-- === Typography === -->
     <FontFamily x:Key="AppFont">Segoe UI Variable, Segoe UI</FontFamily>
-    <system:Double x:Key="FontSizeSmall">11</system:Double>
-    <system:Double x:Key="FontSizeNormal">12</system:Double>
-    <system:Double x:Key="FontSizeMedium">14</system:Double>
-    <system:Double x:Key="FontSizeLarge">16</system:Double>
+    <system:Double x:Key="FontSizeSmall">13</system:Double>
+    <system:Double x:Key="FontSizeNormal">14</system:Double>
+    <system:Double x:Key="FontSizeMedium">16</system:Double>
+    <system:Double x:Key="FontSizeLarge">19</system:Double>
 
     <!-- === Shadows === -->
     <DropShadowEffect x:Key="CardShadow" ShadowDepth="2" BlurRadius="8"
                       Color="#000000" Opacity="0.08" Direction="270"/>
     <DropShadowEffect x:Key="MenuShadow" ShadowDepth="4" BlurRadius="16"
                       Color="#000000" Opacity="0.14" Direction="270"/>
+
+    <!-- === Button Styles === -->
+
+    <!-- 기본 둥근 버튼 (보조) -->
+    <Style x:Key="SubtleButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderLightBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#F0F0F0"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#D0D0D0"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#E4E4E4"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#C0C0C0"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 액센트 둥근 버튼 (주요 동작) -->
+    <Style x:Key="AccentButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="20,7"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value>
+                                    <SolidColorBrush Color="{StaticResource AccentPressedColor}"/>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 툴바 도구 버튼 (아이콘 전용, Chrome 스타일) -->
+    <Style x:Key="ToolbarButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="MinWidth" Value="40"/>
+        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="ToolTipService.InitialShowDelay" Value="400"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="{StaticResource ToolbarButtonHoverColor}"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="{StaticResource ToolbarButtonActiveColor}"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 툴바 도구 버튼 (활성 상태) -->
+    <Style x:Key="ToolbarButtonActive" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
+        <Setter Property="Background">
+            <Setter.Value><SolidColorBrush Color="{StaticResource ToolbarButtonActiveColor}"/></Setter.Value>
+        </Setter>
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+    </Style>
+
+    <!-- 작은 텍스트 버튼 (캡쳐기록 등) -->
+    <Style x:Key="SmallButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderLightBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#F0F0F0"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#E4E4E4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- === Editor Colors (drawing palette) === -->
     <Color x:Key="PaletteBlue">#0078D4</Color>

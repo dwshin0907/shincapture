@@ -27,15 +27,24 @@ public partial class MainWindow : Window
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
 
+        Icon? trayIcon = null;
+        try
+        {
+            var stream = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/icon.ico"))?.Stream;
+            if (stream != null) trayIcon = new Icon(stream);
+        }
+        catch { }
+        trayIcon ??= SystemIcons.Application;
+
         _trayIcon = new NotifyIcon
         {
-            Icon = new Icon(System.Windows.Application.GetResourceStream(
-                new Uri("pack://application:,,,/Assets/icon.ico"))!.Stream),
+            Icon = trayIcon,
             Text = "신캡쳐",
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
         };
-        _trayIcon.DoubleClick += (_, _) => ToggleMainWindow();
+        _trayIcon.DoubleClick += (_, _) => ShowEditor();
 
         Loaded += OnLoaded;
         Closing += OnClosing;
@@ -46,18 +55,48 @@ public partial class MainWindow : Window
         _hotkeyManager.Initialize(this);
         RegisterHotkeys();
         PopulateCaptureGrid();
+
+        // 시작 시 편집기 바로 열기
+        ShowEditor();
+        Hide(); // 메인 윈도우는 트레이로
     }
 
     private void RegisterHotkeys()
     {
         _hotkeyManager.UnregisterAll();
-        _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
+
+        // Windows Snipping Tool의 PrintScreen 선점 해제 (최초 1회)
+        DisableWindowsSnippingToolPrintScreen();
+
+        // PrintScreen 등록
+        int psResult = _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
+
+        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응
+        _hotkeyManager.Register("Ctrl+Shift+C", () => StartCapture(CaptureMode.Region));
+
         _hotkeyManager.Register(_settings.Hotkeys.FreeformCapture, () => StartCapture(CaptureMode.Freeform));
         _hotkeyManager.Register(_settings.Hotkeys.WindowCapture, () => StartCapture(CaptureMode.Window));
         _hotkeyManager.Register(_settings.Hotkeys.ElementCapture, () => StartCapture(CaptureMode.Element));
         _hotkeyManager.Register(_settings.Hotkeys.FullscreenCapture, () => StartCapture(CaptureMode.Fullscreen));
         _hotkeyManager.Register(_settings.Hotkeys.ScrollCapture, () => StartCapture(CaptureMode.Scroll));
         _hotkeyManager.Register(_settings.Hotkeys.FixedSizeCapture, () => StartCapture(CaptureMode.FixedSize));
+    }
+
+    /// <summary>Windows 11 캡처 도구(Snipping Tool)의 PrintScreen 선점 해제</summary>
+    private static void DisableWindowsSnippingToolPrintScreen()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Control Panel\Keyboard", true);
+            if (key != null)
+            {
+                var val = key.GetValue("PrintScreenKeyForSnippingEnabled");
+                if (val is int v && v == 1)
+                    key.SetValue("PrintScreenKeyForSnippingEnabled", 0, Microsoft.Win32.RegistryValueKind.DWord);
+            }
+        }
+        catch { }
     }
 
     private void StartCapture(CaptureMode mode)
@@ -95,32 +134,56 @@ public partial class MainWindow : Window
             {
                 HandleCaptureResult(overlay.Result);
             }
-            else if (captureMode is ScrollCaptureMode scrollMode
-                     && scrollMode.GetStitchedBitmap() is { } stitched)
+            else if (captureMode is ScrollCaptureMode scrollMode && scrollMode.IsComplete)
             {
-                HandleCaptureResult(new CaptureResult
-                {
-                    Image  = stitched,
-                    Region = new System.Drawing.Rectangle(0, 0, stitched.Width, stitched.Height)
-                });
+                // Phase 2: 오버레이 닫힌 후 컨테이너 감지 + 스크롤 캡쳐
+                System.Threading.Tasks.Task.Run(() => scrollMode.PerformScrollCapture())
+                    .ContinueWith(_ =>
+                    {
+                        var stitched = scrollMode.GetStitchedBitmap();
+                        if (stitched != null)
+                            HandleCaptureResult(new CaptureResult
+                            {
+                                Image = stitched,
+                                Region = new System.Drawing.Rectangle(0, 0, stitched.Width, stitched.Height)
+                            });
+                    }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
             }
         };
         overlay.Start(captureMode);
     }
 
+    private EditorWindow? _editorWindow;
+
     private void HandleCaptureResult(CaptureResult result)
     {
+        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통)
+        System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
+
         switch (_settings.Capture.AfterCapture)
         {
             case AfterCaptureAction.OpenEditor:
-                var editor = new EditorWindow(result.Image, _saveManager, _settings);
-                editor.Show();
+                if (_editorWindow != null)
+                {
+                    _editorWindow.LoadNewCapture(result.Image);
+                    _editorWindow.Show();
+                    _editorWindow.WindowState = WindowState.Normal;
+                    _editorWindow.Topmost = true;
+                    _editorWindow.Activate();
+                    _editorWindow.Topmost = false;
+                }
+                else
+                {
+                    _editorWindow = new EditorWindow(result.Image, _saveManager, _settings, _settingsManager);
+                    _editorWindow.Show();
+                    _editorWindow.Activate();
+                }
                 break;
             case AfterCaptureAction.SaveDirectly:
                 var savedPath = _saveManager.SaveAuto(result.Image, _settings);
                 break;
             case AfterCaptureAction.ClipboardOnly:
-                System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
+                // 이미 위에서 복사됨
                 break;
         }
     }
@@ -128,7 +191,7 @@ public partial class MainWindow : Window
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("✏ 영역지정 캡쳐\tPrtSc", null, (_, _) => StartCapture(CaptureMode.Region));
+        menu.Items.Add("✏ 영역지정 캡쳐\tPrtSc / Ctrl+Shift+C", null, (_, _) => StartCapture(CaptureMode.Region));
         menu.Items.Add("✧ 자유형 캡쳐\tCtrl+Shift+F", null, (_, _) => StartCapture(CaptureMode.Freeform));
         menu.Items.Add("☐ 창 캡쳐\tCtrl+Shift+W", null, (_, _) => StartCapture(CaptureMode.Window));
         menu.Items.Add("◫ 단위영역 캡쳐\tCtrl+Shift+D", null, (_, _) => StartCapture(CaptureMode.Element));
@@ -136,11 +199,11 @@ public partial class MainWindow : Window
         menu.Items.Add("↕ 스크롤 캡쳐\tCtrl+Shift+S", null, (_, _) => StartCapture(CaptureMode.Scroll));
         menu.Items.Add("⊞ 지정사이즈 캡쳐\tCtrl+Shift+Z", null, (_, _) => StartCapture(CaptureMode.FixedSize));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("📂 최근 캡쳐", null, (_, _) => { });
+        menu.Items.Add("✏ 편집기 열기", null, (_, _) => ShowEditor());
         menu.Items.Add("📁 저장 폴더 열기", null, (_, _) => OpenSaveFolder());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("⚙ 환경설정", null, (_, _) => OpenSettings());
-        menu.Items.Add("ℹ 신캡쳐 정보", null, (_, _) => { });
+        menu.Items.Add("ℹ 신캡쳐 정보", null, (_, _) => ShowAbout());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("✕ 종료", null, (_, _) => ExitApplication());
         return menu;
@@ -157,11 +220,134 @@ public partial class MainWindow : Window
         if (_settings.General.MinimizeToTray) { e.Cancel = true; Hide(); }
     }
 
+    private void ShowEditor()
+    {
+        if (_editorWindow != null)
+        {
+            _editorWindow.Show();
+            _editorWindow.WindowState = WindowState.Normal;
+            _editorWindow.Topmost = true;
+            _editorWindow.Activate();
+            _editorWindow.Topmost = false;
+        }
+        else
+        {
+            // 빈 캔버스로 편집기 생성 (흰색 800x600)
+            var blank = new System.Drawing.Bitmap(800, 600, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(blank))
+                g.Clear(System.Drawing.Color.White);
+            _editorWindow = new EditorWindow(blank, _saveManager, _settings, _settingsManager);
+            _editorWindow.Show();
+            _editorWindow.Activate();
+        }
+    }
+
     private void OpenSaveFolder()
     {
         var path = _settings.Save.AutoSavePath;
         if (!System.IO.Directory.Exists(path)) System.IO.Directory.CreateDirectory(path);
         System.Diagnostics.Process.Start("explorer.exe", path);
+    }
+
+    private void ShowAbout()
+    {
+        var w = new Window
+        {
+            Title = "신캡쳐 정보",
+            Width = 420, Height = 340,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.ToolWindow,
+            Background = (System.Windows.Media.Brush)FindResource("BackgroundPrimaryBrush")
+        };
+
+        var sp = new System.Windows.Controls.StackPanel { Margin = new Thickness(28, 20, 28, 20) };
+
+        // 앱 이름
+        sp.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "신캡쳐 (ShinCapture)",
+            FontSize = 20, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2)
+        });
+        sp.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "v1.0.0 — 무료 스크린캡쳐 & 편집 도구",
+            FontSize = 12, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"),
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        // 구분선
+        sp.Children.Add(new System.Windows.Controls.Separator { Margin = new Thickness(0, 0, 0, 12) });
+
+        // 개발자 정보
+        sp.Children.Add(MakeInfoRow("개발", "신대우 수석"));
+        sp.Children.Add(MakeInfoRow("필명", "웬비디아 / 스댕"));
+        sp.Children.Add(MakeInfoRow("이메일", "popolong@naver.com", true));
+        sp.Children.Add(MakeInfoRow("채널", "ChatGPT도 모르는 AI실전활용법"));
+
+        // 네프콘 링크
+        var link = new System.Windows.Controls.TextBlock { Margin = new Thickness(0, 4, 0, 16) };
+        var hyperlink = new System.Windows.Documents.Hyperlink
+        {
+            NavigateUri = new Uri("https://contents.premium.naver.com/market/ai")
+        };
+        hyperlink.Inlines.Add("https://contents.premium.naver.com/market/ai");
+        hyperlink.RequestNavigate += (_, args) =>
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = args.Uri.ToString(), UseShellExecute = true
+            });
+        };
+        link.Inlines.Add(hyperlink);
+        sp.Children.Add(link);
+
+        // 구분선
+        sp.Children.Add(new System.Windows.Controls.Separator { Margin = new Thickness(0, 0, 0, 12) });
+
+        sp.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "© 2026 신캡쳐. 광고 없는 깔끔한 캡쳐 도구.",
+            FontSize = 11, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush")
+        });
+
+        w.Content = sp;
+        w.ShowDialog();
+    }
+
+    private static System.Windows.Controls.Grid MakeInfoRow(string label, string value, bool selectable = false)
+    {
+        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(60) });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var lbl = new System.Windows.Controls.TextBlock
+        {
+            Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55))
+        };
+        System.Windows.Controls.Grid.SetColumn(lbl, 0);
+        grid.Children.Add(lbl);
+
+        if (selectable)
+        {
+            var tb = new System.Windows.Controls.TextBox
+            {
+                Text = value, FontSize = 12, IsReadOnly = true,
+                BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(0)
+            };
+            System.Windows.Controls.Grid.SetColumn(tb, 1);
+            grid.Children.Add(tb);
+        }
+        else
+        {
+            var val = new System.Windows.Controls.TextBlock { Text = value, FontSize = 12 };
+            System.Windows.Controls.Grid.SetColumn(val, 1);
+            grid.Children.Add(val);
+        }
+
+        return grid;
     }
 
     private void OpenSettings()
@@ -181,7 +367,7 @@ public partial class MainWindow : Window
         CaptureModesPanel.Items.Clear();
         var modes = new (string icon, string name, string shortcut, CaptureMode mode)[]
         {
-            ("✏", "영역지정", "PrtSc",        CaptureMode.Region),
+            ("✏", "영역지정", "PrtSc / Ctrl+Shift+C", CaptureMode.Region),
             ("✧", "자유형",   "Ctrl+Shift+F", CaptureMode.Freeform),
             ("☐", "창 캡쳐",  "Ctrl+Shift+W", CaptureMode.Window),
             ("◫", "단위영역", "Ctrl+Shift+D", CaptureMode.Element),
@@ -241,6 +427,8 @@ public partial class MainWindow : Window
 
     private void ExitApplication()
     {
+        _editorWindow?.ForceClose();
+        _editorWindow = null;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _hotkeyManager.Dispose();

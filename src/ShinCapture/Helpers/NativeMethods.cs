@@ -80,6 +80,9 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int x, int y);
+
     // --- Scroll ---
     [DllImport("user32.dll")]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -87,6 +90,25 @@ internal static class NativeMethods
     public const uint WM_VSCROLL = 0x0115;
     public const int SB_LINEDOWN = 1;
     public const int SB_PAGEDOWN = 3;
+
+    // --- Mouse Input (마우스 휠 시뮬레이션) ---
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(uint dwFlags, int dx, int dy, int dwData, IntPtr dwExtraInfo);
+
+    public const uint MOUSEEVENTF_WHEEL = 0x0800;
+    public const int WHEEL_DELTA = 120;
+
+    // --- DPI / Physical Screen ---
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
+
+    public const int SM_XVIRTUALSCREEN = 76;
+    public const int SM_YVIRTUALSCREEN = 77;
+    public const int SM_CXVIRTUALSCREEN = 78;
+    public const int SM_CYVIRTUALSCREEN = 79;
+
+    [DllImport("user32.dll")]
+    public static extern bool SetProcessDPIAware();
 
     // --- Structs ---
     [StructLayout(LayoutKind.Sequential)]

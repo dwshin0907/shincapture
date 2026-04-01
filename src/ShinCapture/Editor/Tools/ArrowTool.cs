@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
@@ -15,9 +16,14 @@ public class ArrowTool : ToolBase
     public override string Name => "Arrow";
     public override string Icon => "➡️";
 
+    public ArrowHeadStyle SelectedHeadStyle { get; set; } = ArrowHeadStyle.Arrow;
+    public ArrowLineStyle SelectedLineStyle { get; set; } = ArrowLineStyle.Solid;
+
     public ArrowTool(List<EditorObject> objects)
     {
         _objects = objects;
+        CurrentColor = Colors.Black;
+        CurrentWidth = 9.9;
     }
 
     public override void OnMouseDown(Point position, MouseButtonEventArgs e)
@@ -27,7 +33,10 @@ public class ArrowTool : ToolBase
             Start = position,
             End = position,
             Color = CurrentColor,
-            StrokeWidth = CurrentWidth
+            StrokeWidth = CurrentWidth,
+            HeadSize = Math.Max(6, CurrentWidth * 2.8),
+            HeadStyle = SelectedHeadStyle,
+            LineStyle = SelectedLineStyle
         };
         _isDrawing = true;
     }

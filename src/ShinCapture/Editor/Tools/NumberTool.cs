@@ -19,6 +19,8 @@ public class NumberTool : ToolBase
     public NumberTool(List<EditorObject> objects)
     {
         _objects = objects;
+        CurrentColor = Colors.Black;
+        CurrentWidth = 22.4;
     }
 
     public override void OnMouseDown(Point position, MouseButtonEventArgs e)
@@ -28,7 +30,7 @@ public class NumberTool : ToolBase
             Center = position,
             Number = Counter,
             CircleColor = CurrentColor,
-            Radius = 14.0
+            Radius = 8 + CurrentWidth * 1.2
         };
     }
 

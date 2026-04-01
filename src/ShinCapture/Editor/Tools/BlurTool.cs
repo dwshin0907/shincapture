@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ShinCapture.Editor.Objects;
 
 namespace ShinCapture.Editor.Tools;
@@ -10,6 +11,7 @@ namespace ShinCapture.Editor.Tools;
 public class BlurTool : ToolBase
 {
     private readonly List<EditorObject> _objects;
+    private readonly BitmapSource _sourceImage;
     private Point _start;
     private Point _end;
     private bool _isDrawing;
@@ -20,9 +22,10 @@ public class BlurTool : ToolBase
 
     public BlurStrength BlurStrength { get; set; } = BlurStrength.Medium;
 
-    public BlurTool(List<EditorObject> objects)
+    public BlurTool(List<EditorObject> objects, BitmapSource sourceImage)
     {
         _objects = objects;
+        _sourceImage = sourceImage;
     }
 
     public override void OnMouseDown(Point position, MouseButtonEventArgs e)
@@ -30,14 +33,12 @@ public class BlurTool : ToolBase
         _start = position;
         _end = position;
         _isDrawing = true;
-        UpdatePreview();
     }
 
     public override void OnMouseMove(Point position, MouseEventArgs e)
     {
         if (!_isDrawing) return;
         _end = position;
-        UpdatePreview();
     }
 
     public override void OnMouseUp(Point position, MouseButtonEventArgs e)
@@ -68,7 +69,8 @@ public class BlurTool : ToolBase
         _preview = new BlurObject
         {
             Region = region,
-            BlurStrength = BlurStrength
+            BlurStrength = BlurStrength,
+            SourceImage = _sourceImage
         };
     }
 
@@ -82,18 +84,19 @@ public class BlurTool : ToolBase
 
     public override void RenderPreview(DrawingContext dc)
     {
-        if (_preview != null)
-        {
-            _preview.Render(dc);
-        }
-        else if (_isDrawing)
+        if (_isDrawing)
         {
             var region = GetRegion();
             if (region.Width > 0 && region.Height > 0)
             {
-                var pen = new Pen(new SolidColorBrush(Colors.Gray), 1) { DashStyle = DashStyles.Dash };
-                pen.Freeze();
-                dc.DrawRectangle(null, pen, region);
+                // 드래그 중 블러 미리보기
+                var preview = new BlurObject
+                {
+                    Region = region,
+                    BlurStrength = BlurStrength,
+                    SourceImage = _sourceImage
+                };
+                preview.Render(dc);
             }
         }
     }

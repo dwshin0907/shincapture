@@ -88,6 +88,9 @@ public partial class CaptureOverlay : Window
         _mode?.OnMouseMove(e);
         Redraw();
 
+        // 모드가 요청하는 커서 적용 (없으면 기본 Cross)
+        Cursor = _mode?.RequestedCursor ?? Cursors.Cross;
+
         if (_settings.ShowCrosshair)
             UpdateCrosshair(e.GetPosition(this));
         if (_settings.ShowColorCode || true)
@@ -114,8 +117,13 @@ public partial class CaptureOverlay : Window
         {
             Result = null;
             Close();
+            return;
         }
-        else if (e.Key == Key.Enter || e.Key == Key.Return)
+
+        // 모드에 키 이벤트 전달 (엔터로 캡쳐 등)
+        _mode?.OnKeyDown(e);
+
+        if (e.Key == Key.Enter || e.Key == Key.Return)
         {
             if (_mode?.IsComplete == true)
                 FinishCapture();
@@ -266,5 +274,7 @@ internal sealed class RenderDrawingVisual : System.Windows.UIElement
     public DrawingContext RenderOpen() => _visual.RenderOpen();
 
     protected override System.Windows.Size MeasureCore(System.Windows.Size availableSize)
-        => availableSize;
+        => new System.Windows.Size(
+            double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
+            double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
 }

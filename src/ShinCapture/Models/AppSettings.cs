@@ -16,6 +16,7 @@ public class AppSettings
         new() { Name = "FHD", Width = 1920, Height = 1080 }
     };
     public RecentCapturesSettings RecentCaptures { get; set; } = new();
+    public int[] CustomColors { get; set; } = Array.Empty<int>();
 }
 
 public class GeneralSettings
