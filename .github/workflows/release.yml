@@ -79,7 +79,18 @@ jobs:
           Compress-Archive -Path $exe -DestinationPath $zip -Force
           Get-ChildItem dist
 
+      # ─────────────────────────────────────────────────────────────
+      # SignPath 코드 서명 (Foundation OSS 승인 후 활성화)
+      #
+      # 활성화 방법: GitHub repo Settings > Variables 에서
+      #   SIGNING_ENABLED = true
+      # 로 설정하면 아래 3개 step이 자동으로 실행됨.
+      # Foundation 승인 전까지는 false(기본)로 두면 unsigned EXE가
+      # Release에 올라감.
+      # ─────────────────────────────────────────────────────────────
+
       - name: Upload unsigned installer as artifact
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
         id: upload-unsigned
         uses: actions/upload-artifact@v4
         with:
@@ -87,6 +98,7 @@ jobs:
           path: dist/ShinCapture_Setup_v${{ env.VERSION }}.exe
 
       - name: Submit to SignPath for signing
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -99,6 +111,7 @@ jobs:
           output-artifact-directory: dist-signed
 
       - name: Replace unsigned installer with signed one and rebuild ZIP
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
         run: |
           $signedExe = "dist-signed\ShinCapture_Setup_v${{ env.VERSION }}.exe"
