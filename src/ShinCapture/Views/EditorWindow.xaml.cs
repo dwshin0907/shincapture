@@ -334,26 +334,108 @@ public partial class EditorWindow : Window
         redoBtn.Click += (_, _) => _commandStack.Redo();
         ToolbarPanel.Children.Add(redoBtn);
 
-        // 채널 배너 (우측 고정, 네이버 녹색)
+        // 채널 배너 (우측 고정, 네이버 녹색 그라데이션 + 플래시카드 애니메이션)
+        LinearGradientBrush MakeBg(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2)
+        {
+            var brush = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0, 0),
+                EndPoint = new System.Windows.Point(0, 1)
+            };
+            brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(r1, g1, b1), 0));
+            brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(r2, g2, b2), 1));
+            return brush;
+        }
+
+        var shadow = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            BlurRadius = 8,
+            ShadowDepth = 1,
+            Direction = 270,
+            Color = System.Windows.Media.Colors.Black,
+            Opacity = 0.22
+        };
+
         var banner = new Border
         {
-            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x03, 0xC7, 0x5A)),
-            BorderThickness = new Thickness(0),
+            Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50),
+            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(14, 6, 14, 6),
+            Padding = new Thickness(13, 6, 13, 6),
             Cursor = Cursors.Hand,
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠"
+            Effect = shadow,
+            ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
         };
-        var bannerText = new TextBlock
+
+        var stack = new StackPanel { Orientation = System.Windows.Controls.Orientation.Vertical };
+        var subText = new TextBlock
         {
-            Text = "AI 실전활용법 공부하기 \u2192",
+            Text = "네이버 프리미엄콘텐츠 AI 분야 1위",
+            FontSize = 9.5,
+            FontWeight = FontWeights.Normal,
+            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 1)
+        };
+
+        var flashMessages = new[]
+        {
+            "아직도 ChatGPT만 쓰세요? \u2192",
+            "ChatGPT도 모르는 실전 활용법 \u2192",
+            "AI 시대, 뒤처지지 않으려면 \u2192",
+            "지금 바로 공부하러 가기 \u2192"
+        };
+        int flashIndex = 0;
+        var mainText = new TextBlock
+        {
+            Text = flashMessages[0],
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
             Foreground = System.Windows.Media.Brushes.White,
-            VerticalAlignment = VerticalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            // 가장 긴 카피 기준으로 폭 확보 → 전환 시 레이아웃 흔들림 방지
+            MinWidth = 200
         };
-        banner.Child = bannerText;
+        stack.Children.Add(subText);
+        stack.Children.Add(mainText);
+        banner.Child = stack;
+
+        // 2.5초 간격 플래시카드: fade-out (280ms) → 텍스트 교체 → fade-in (280ms)
+        var flashTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2.5)
+        };
+        flashTimer.Tick += (_, _) =>
+        {
+            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                1.0, 0.0, new Duration(TimeSpan.FromMilliseconds(280)))
+            {
+                EasingFunction = new System.Windows.Media.Animation.QuadraticEase
+                {
+                    EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn
+                }
+            };
+            fadeOut.Completed += (__, ___) =>
+            {
+                flashIndex = (flashIndex + 1) % flashMessages.Length;
+                mainText.Text = flashMessages[flashIndex];
+                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
+                    0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(280)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase
+                    {
+                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+                    }
+                };
+                mainText.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+            };
+            mainText.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        };
+        flashTimer.Start();
+        this.Closed += (_, _) => flashTimer.Stop();
+
         banner.MouseDown += (_, _) =>
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -364,11 +446,15 @@ public partial class EditorWindow : Window
         };
         banner.MouseEnter += (_, _) =>
         {
-            banner.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x02, 0xB3, 0x50));
+            banner.Background = MakeBg(0x05, 0xDB, 0x66, 0x03, 0xBE, 0x57);
+            shadow.Opacity = 0.35;
+            shadow.BlurRadius = 12;
         };
         banner.MouseLeave += (_, _) =>
         {
-            banner.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x03, 0xC7, 0x5A));
+            banner.Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50);
+            shadow.Opacity = 0.22;
+            shadow.BlurRadius = 8;
         };
         BannerArea.Child = banner;
     }
