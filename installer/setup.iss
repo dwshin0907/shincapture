@@ -5,7 +5,10 @@
 
 #define MyAppName "신캡쳐"
 #define MyAppNameEn "ShinCapture"
-#define MyAppVersion "1.0.12"
+; 버전은 로컬 기본값. CI 빌드에서는 ISCC /DMyAppVersion=x.y.z 로 덮어씀
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.12"
+#endif
 #define MyAppPublisher "ShinCapture"
 #define MyAppURL "https://shincapture.com"
 #define MyAppExeName "ShinCapture.exe"
@@ -49,7 +52,7 @@ CloseApplications=yes
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 
 [Messages]
-korean.WelcomeLabel1=%n신캡쳐 v1.0.12
+korean.WelcomeLabel1=%n신캡쳐 v{#MyAppVersion}
 korean.WelcomeLabel2=기존 캡쳐 프로그램의 깔끔한 대안, 신캡쳐를 설치합니다.%n%n%n다른 캡쳐 프로그램과 다른 점:%n%n  ✓  완전 무료 — 광고, 팝업, 회원가입 없음%n  ✓  7가지 캡쳐 모드 — 영역, 창, 스크롤, 전체화면 등%n  ✓  14가지 편집 도구 — 펜, 화살표, 모자이크, 번호 등%n  ✓  실시간 편집 — 색상·폰트 변경 즉시 반영%n  ✓  캡쳐 기록 관리 — 세션 내 50개 보관, 일괄 저장%n  ✓  가벼운 단일 파일 — .NET 런타임 내장, 즉시 실행%n  ✓  글로벌 단축키 — 어떤 앱 위에서든 즉시 캡쳐%n%n계속하려면 [다음]을 클릭하세요.
 
 [Tasks]

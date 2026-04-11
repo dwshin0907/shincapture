@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.13)'
+        required: true
+        default: '1.0.13'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build, Package, Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/v',''
+          } else {
+            $v = '${{ github.event.inputs.version }}'
+          }
+          if (-not $v) { throw "Version not resolved" }
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Resolved version: $v"
+
+      - name: Restore
+        run: dotnet restore ShinCapture.sln
+
+      - name: Test
+        run: dotnet test ShinCapture.sln --configuration Release --no-restore --verbosity minimal
+
+      - name: Publish (self-contained single-file EXE)
+        run: >
+          dotnet publish src/ShinCapture/ShinCapture.csproj
+          -c Release
+          -r win-x64
+          --self-contained
+          -p:PublishSingleFile=true
+          -p:Version=${{ env.VERSION }}
+          -o publish_new
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC not found at $iscc" }
+          & $iscc "/DMyAppVersion=${{ env.VERSION }}" installer\setup.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with code $LASTEXITCODE" }
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $exe = "dist\ShinCapture_Setup_v${{ env.VERSION }}.exe"
+          $zip = "dist\ShinCapture_v${{ env.VERSION }}.zip"
+          if (-not (Test-Path $exe)) { throw "Installer not found: $exe" }
+          Compress-Archive -Path $exe -DestinationPath $zip -Force
+          Get-ChildItem dist
+
+      - name: Upload unsigned installer as artifact
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: dist/ShinCapture_Setup_v${{ env.VERSION }}.exe
+
+      - name: Submit to SignPath for signing
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+
+      - name: Replace unsigned installer with signed one and rebuild ZIP
+        shell: pwsh
+        run: |
+          $signedExe = "dist-signed\ShinCapture_Setup_v${{ env.VERSION }}.exe"
+          if (-not (Test-Path $signedExe)) {
+            Write-Host "Contents of dist-signed:"
+            Get-ChildItem dist-signed -Recurse
+            throw "Signed installer not found at $signedExe"
+          }
+          Copy-Item $signedExe "dist\ShinCapture_Setup_v${{ env.VERSION }}.exe" -Force
+          Compress-Archive `
+            -Path "dist\ShinCapture_Setup_v${{ env.VERSION }}.exe" `
+            -DestinationPath "dist\ShinCapture_v${{ env.VERSION }}.zip" -Force
+          Write-Host "Final dist contents:"
+          Get-ChildItem dist
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ShinCapture ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/ShinCapture_Setup_v${{ env.VERSION }}.exe
+            dist/ShinCapture_v${{ env.VERSION }}.zip
