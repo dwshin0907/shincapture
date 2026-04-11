@@ -8,7 +8,7 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AssemblyName>ShinCapture</AssemblyName>
     <RootNamespace>ShinCapture</RootNamespace>
-    <Version>1.0.12</Version>
+    <Version>1.0.13</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
