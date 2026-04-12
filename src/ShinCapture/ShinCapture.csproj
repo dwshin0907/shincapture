@@ -6,7 +6,9 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ShinCapture</AssemblyName>
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <RootNamespace>ShinCapture</RootNamespace>
     <Version>1.0.13</Version>
     <PublishSingleFile>true</PublishSingleFile>
