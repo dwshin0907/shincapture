@@ -86,4 +86,34 @@ public class SettingsManagerTests : IDisposable
         Assert.Equal("HD", settings.FixedSizes[0].Name);
         Assert.Equal(1280, settings.FixedSizes[0].Width);
     }
+
+    [Fact]
+    public void Save_ThenLoad_PersistsTextCaptureHotkey()
+    {
+        var settings = _manager.Load();
+        settings.Hotkeys.TextCapture = "Ctrl+Alt+O";
+        _manager.Save(settings);
+        var loaded = _manager.Load();
+        Assert.Equal("Ctrl+Alt+O", loaded.Hotkeys.TextCapture);
+    }
+
+    [Fact]
+    public void Load_WhenNoFile_OcrDefaults()
+    {
+        var settings = _manager.Load();
+        Assert.Equal("ko", settings.Ocr.Language);
+        Assert.True(settings.Ocr.UpscaleSmallImages);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_PersistsOcrSettings()
+    {
+        var settings = _manager.Load();
+        settings.Ocr.Language = "en-US";
+        settings.Ocr.UpscaleSmallImages = false;
+        _manager.Save(settings);
+        var loaded = _manager.Load();
+        Assert.Equal("en-US", loaded.Ocr.Language);
+        Assert.False(loaded.Ocr.UpscaleSmallImages);
+    }
 }

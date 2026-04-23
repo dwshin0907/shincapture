@@ -10,6 +10,7 @@ public class AppSettings
     public CaptureSettings Capture { get; set; } = new();
     public SaveSettings Save { get; set; } = new();
     public HotkeySettings Hotkeys { get; set; } = new();
+    public OcrSettings Ocr { get; set; } = new();
     public List<FixedSizePreset>? FixedSizes { get; set; } = new()
     {
         new() { Name = "HD", Width = 1280, Height = 720 },
@@ -54,9 +55,20 @@ public class HotkeySettings
     public string FullscreenCapture { get; set; } = "Ctrl+Shift+A";
     public string ScrollCapture { get; set; } = "Ctrl+Shift+S";
     public string FixedSizeCapture { get; set; } = "Ctrl+Shift+Z";
+    public string TextCapture { get; set; } = "Ctrl+Shift+T";
+
+    // true: PrintScreen 키를 신캡쳐가 독점 (Windows Snipping Tool 선점 해제)
+    // false: Windows 기본 동작에 양보 (PrintScreen → Snipping Tool)
+    public bool OverridePrintScreen { get; set; } = true;
 }
 
 public class RecentCapturesSettings
 {
     public int MaxCount { get; set; } = 100;
+}
+
+public class OcrSettings
+{
+    public string Language { get; set; } = "ko";
+    public bool UpscaleSmallImages { get; set; } = true;
 }
