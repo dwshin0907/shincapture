@@ -184,7 +184,7 @@ public partial class MainWindow : Window
 
     private async void RunOcrAndNotify(System.Drawing.Bitmap image)
     {
-        var langTag = ResolveOcrLanguage(_settings.Ocr.Language);
+        var langTag = Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
         if (langTag == null)
         {
             PromptInstallLanguagePack(_settings.Ocr.Language);
@@ -212,15 +212,6 @@ public partial class MainWindow : Window
             _trayIcon.ShowBalloonTip(4000, "신캡쳐 — OCR 실패",
                 ex.Message, System.Windows.Forms.ToolTipIcon.Error);
         }
-    }
-
-    private static string? ResolveOcrLanguage(string preferred)
-    {
-        if (Services.OcrService.IsLanguageAvailable(preferred)) return preferred;
-        if (Services.OcrService.IsLanguageAvailable("ko")) return "ko";
-        if (Services.OcrService.IsLanguageAvailable("en-US")) return "en-US";
-        var list = Services.OcrService.GetAvailableLanguages();
-        return list.Count > 0 ? list[0] : null;
     }
 
     private void PromptInstallLanguagePack(string langTag)

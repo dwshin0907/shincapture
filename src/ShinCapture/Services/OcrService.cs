@@ -76,6 +76,19 @@ public static class OcrService
         }
     }
 
+    /// <summary>
+    /// preferred 언어가 사용 가능하면 그대로 반환. 아니면 ko → en-US → 첫 번째 사용 가능한 언어 순서로 폴백.
+    /// 설치된 OCR 언어팩이 전혀 없으면 null.
+    /// </summary>
+    public static string? ResolveLanguageOrFallback(string preferred)
+    {
+        if (IsLanguageAvailable(preferred)) return preferred;
+        if (IsLanguageAvailable("ko")) return "ko";
+        if (IsLanguageAvailable("en-US")) return "en-US";
+        var list = GetAvailableLanguages();
+        return list.Count > 0 ? list[0] : null;
+    }
+
     private static async Task<SoftwareBitmap> BitmapToSoftwareBitmapAsync(Bitmap bitmap)
     {
         using var ms = new MemoryStream();

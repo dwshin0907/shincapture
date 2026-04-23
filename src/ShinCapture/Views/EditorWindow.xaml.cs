@@ -1610,7 +1610,7 @@ public partial class EditorWindow : Window
 
         try
         {
-            var langTag = ResolveOcrLanguageForEditor(_settings.Ocr.Language);
+            var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
             if (langTag == null)
             {
                 OcrPanelTitle.Text = "OCR 언어팩이 필요합니다";
@@ -1645,15 +1645,6 @@ public partial class EditorWindow : Window
             OcrTextBox.Text = ex.Message;
             SetStatus("OCR 실패");
         }
-    }
-
-    private static string? ResolveOcrLanguageForEditor(string preferred)
-    {
-        if (ShinCapture.Services.OcrService.IsLanguageAvailable(preferred)) return preferred;
-        if (ShinCapture.Services.OcrService.IsLanguageAvailable("ko")) return "ko";
-        if (ShinCapture.Services.OcrService.IsLanguageAvailable("en-US")) return "en-US";
-        var list = ShinCapture.Services.OcrService.GetAvailableLanguages();
-        return list.Count > 0 ? list[0] : null;
     }
 
     private static System.Drawing.Bitmap BitmapSourceToBitmap(System.Windows.Media.Imaging.BitmapSource source)
