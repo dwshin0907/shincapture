@@ -1,7 +1,7 @@
 <Window x:Class="ShinCapture.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="신캡쳐 — 환경설정" Width="500" Height="450"
+        Title="신캡쳐 — 환경설정" Width="500" Height="520"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{DynamicResource BackgroundPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
@@ -114,6 +114,11 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="영역지정" VerticalAlignment="Center" Margin="0,0,0,10"/>
@@ -134,8 +139,28 @@
                     <TextBlock Grid.Row="5" Grid.Column="0" Text="스크롤" VerticalAlignment="Center" Margin="0,0,0,10"/>
                     <TextBox x:Name="TxtHkScroll" Grid.Row="5" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="지정사이즈" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TxtHkFixedSize" Grid.Row="6" Grid.Column="1" Padding="4,3"/>
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="지정사이즈" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkFixedSize" Grid.Row="6" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+
+                    <TextBlock Grid.Row="7" Grid.Column="0" Text="텍스트 캡쳐" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkTextCapture" Grid.Row="7" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+
+                    <Separator Grid.Row="8" Grid.ColumnSpan="2" Margin="0,4,0,10"/>
+
+                    <CheckBox x:Name="ChkOverridePrintScreen" Grid.Row="9" Grid.ColumnSpan="2"
+                              Content="PrintScreen 키를 신캡쳐가 독점 사용" Margin="0,0,0,10"
+                              ToolTip="Windows 11의 'PrtSc 키로 화면 캡쳐 열기' 설정을 자동으로 꺼서, PrintScreen 키가 신캡쳐로 전달되도록 합니다. 해제하면 Windows 기본 동작(캡쳐 도구 열기)으로 되돌립니다."/>
+
+                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="OCR 언어" VerticalAlignment="Center" Width="120"/>
+                        <ComboBox x:Name="CmbOcrLanguage" Width="200"/>
+                        <Button x:Name="BtnOcrLanguageHelp" Content="언어팩 설치" Margin="8,0,0,0"
+                                Padding="8,2" Click="OnOcrLanguageHelp"/>
+                    </StackPanel>
+
+                    <CheckBox x:Name="ChkOcrUpscale" Grid.Row="11" Grid.ColumnSpan="2"
+                              Content="작은 이미지 자동 업스케일 (40px 미만)"
+                              ToolTip="작은 텍스트 인식률을 높이기 위해 40px 미만 이미지를 2배로 확대한 뒤 OCR을 실행합니다."/>
                 </Grid>
             </TabItem>
 

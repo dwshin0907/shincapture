@@ -57,6 +57,12 @@ public partial class SettingsWindow : Window
         TxtHkFullscreen.Text = _settings.Hotkeys.FullscreenCapture;
         TxtHkScroll.Text    = _settings.Hotkeys.ScrollCapture;
         TxtHkFixedSize.Text = _settings.Hotkeys.FixedSizeCapture;
+        TxtHkTextCapture.Text = _settings.Hotkeys.TextCapture;
+        ChkOverridePrintScreen.IsChecked = _settings.Hotkeys.OverridePrintScreen;
+
+        // OCR 언어 드롭다운 채우기
+        PopulateOcrLanguages(_settings.Ocr.Language);
+        ChkOcrUpscale.IsChecked = _settings.Ocr.UpscaleSmallImages;
 
         // 지정사이즈
         _fixedSizes = new ObservableCollection<FixedSizePreset>(
@@ -67,6 +73,32 @@ public partial class SettingsWindow : Window
                 Height = p.Height
             }) ?? Enumerable.Empty<FixedSizePreset>());
         GridFixedSizes.ItemsSource = _fixedSizes;
+    }
+
+    private void PopulateOcrLanguages(string selectedTag)
+    {
+        CmbOcrLanguage.Items.Clear();
+        var langs = ShinCapture.Services.OcrService.GetAvailableLanguages();
+        foreach (var tag in langs)
+        {
+            string display;
+            try { display = $"{System.Globalization.CultureInfo.GetCultureInfo(tag).DisplayName} ({tag})"; }
+            catch { display = tag; }
+            var item = new System.Windows.Controls.ComboBoxItem { Content = display, Tag = tag };
+            CmbOcrLanguage.Items.Add(item);
+            if (string.Equals(tag, selectedTag, StringComparison.OrdinalIgnoreCase))
+                CmbOcrLanguage.SelectedItem = item;
+        }
+        if (CmbOcrLanguage.SelectedItem == null && CmbOcrLanguage.Items.Count > 0)
+            CmbOcrLanguage.SelectedIndex = 0;
+        if (CmbOcrLanguage.Items.Count == 0)
+        {
+            CmbOcrLanguage.Items.Add(new System.Windows.Controls.ComboBoxItem
+            {
+                Content = "(설치된 OCR 언어 없음)", Tag = ""
+            });
+            CmbOcrLanguage.SelectedIndex = 0;
+        }
     }
 
     private void ApplyToSettings()
@@ -102,6 +134,13 @@ public partial class SettingsWindow : Window
         _settings.Hotkeys.FullscreenCapture = TxtHkFullscreen.Text;
         _settings.Hotkeys.ScrollCapture    = TxtHkScroll.Text;
         _settings.Hotkeys.FixedSizeCapture = TxtHkFixedSize.Text;
+        _settings.Hotkeys.TextCapture = TxtHkTextCapture.Text;
+        _settings.Hotkeys.OverridePrintScreen = ChkOverridePrintScreen.IsChecked == true;
+
+        var ocrLangTag = (CmbOcrLanguage.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString();
+        if (!string.IsNullOrEmpty(ocrLangTag))
+            _settings.Ocr.Language = ocrLangTag;
+        _settings.Ocr.UpscaleSmallImages = ChkOcrUpscale.IsChecked == true;
 
         // 지정사이즈
         _settings.FixedSizes = _fixedSizes.ToList();
@@ -160,4 +199,17 @@ public partial class SettingsWindow : Window
 
     private static string? GetComboTag(System.Windows.Controls.ComboBox combo)
         => (combo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString();
+
+    private void OnOcrLanguageHelp(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "ms-settings:regionlanguage",
+                UseShellExecute = true
+            });
+        }
+        catch { }
+    }
 }
