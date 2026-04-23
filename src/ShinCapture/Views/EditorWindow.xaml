@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Main Toolbar -->
@@ -88,8 +89,40 @@
             </Border>
         </Grid>
 
+        <!-- OCR 결과 패널 (기본 숨김) -->
+        <Border Grid.Row="3" x:Name="OcrPanel" Visibility="Collapsed"
+                Background="{DynamicResource BackgroundSecondaryBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                Padding="10,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                    <TextBlock x:Name="OcrPanelTitle" Text="추출된 텍스트"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button x:Name="OcrCloseBtn" Content="×" DockPanel.Dock="Right"
+                            Padding="8,0" Width="28" Height="22" FontSize="16"
+                            HorizontalAlignment="Right" Click="OnOcrClose"/>
+                </DockPanel>
+                <TextBox Grid.Row="1" x:Name="OcrTextBox" MinHeight="60" MaxHeight="160"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         FontFamily="Consolas"/>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+                            Margin="0,6,0,0">
+                    <Button x:Name="OcrSelectAllBtn" Content="모두 선택" Padding="10,3"
+                            Margin="0,0,6,0" Click="OnOcrSelectAll"/>
+                    <Button x:Name="OcrCopyBtn" Content="복사" Padding="14,3"
+                            Style="{DynamicResource AccentButton}" Click="OnOcrCopy"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Status Bar -->
-        <Border Grid.Row="3" Background="{DynamicResource BackgroundSecondaryBrush}"
+        <Border Grid.Row="4" Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                 Padding="10,5">
             <DockPanel>

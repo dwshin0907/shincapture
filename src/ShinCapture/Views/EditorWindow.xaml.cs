@@ -306,6 +306,7 @@ public partial class EditorWindow : Window
             ("번호",    "\u2460", "effect", "N"),   // ①
             ("이미지",  "\u229E", "insert", "I"),   // ⊞
             ("색상추출","\u2316", "insert", ""),    // ⌖
+            ("OCR",     "\U0001F524", "insert", ""), // 🔤 텍스트 추출
             ("크롭",    "\u2702", "edit",   "C"),   // ✂
             ("지우개",  "\u2312", "edit",   "E"),   // ⌒
         };
@@ -318,7 +319,15 @@ public partial class EditorWindow : Window
 
             var tip = string.IsNullOrEmpty(sc) ? name : $"{name} ({sc})";
             var btn = CreateToolButton(icon, tip);
-            btn.Click += (_, _) => SelectTool(name);
+            if (name == "OCR")
+            {
+                btn.ToolTip = "텍스트 추출 (OCR)";
+                btn.Click += (_, _) => RunEditorOcr();
+            }
+            else
+            {
+                btn.Click += (_, _) => SelectTool(name);
+            }
             ToolbarPanel.Children.Add(btn);
             _toolButtons[name] = btn;
             lastGroup = group;
@@ -1579,5 +1588,99 @@ public partial class EditorWindow : Window
         var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         rtb.Render(visual);
         return BitmapHelper.ToBitmap(rtb);
+    }
+
+    private void SetStatus(string text)
+    {
+        if (StatusText != null) StatusText.Text = text;
+    }
+
+    private async void RunEditorOcr()
+    {
+        if (_sourceImage == null)
+        {
+            SetStatus("OCR: 이미지가 없습니다");
+            return;
+        }
+
+        SetStatus("OCR 실행 중...");
+        OcrPanel.Visibility = Visibility.Visible;
+        OcrPanelTitle.Text = "추출된 텍스트 (추출 중…)";
+        OcrTextBox.Text = "";
+
+        try
+        {
+            var langTag = ResolveOcrLanguageForEditor(_settings.Ocr.Language);
+            if (langTag == null)
+            {
+                OcrPanelTitle.Text = "OCR 언어팩이 필요합니다";
+                OcrTextBox.Text =
+                    $"설정된 언어({_settings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
+                    "Windows 설정 > 시간 및 언어 > 언어에서 언어팩을 설치한 뒤 다시 시도해주세요.";
+                SetStatus("OCR 언어팩 없음");
+                return;
+            }
+
+            using var bmp = BitmapSourceToBitmap(_sourceImage);
+            var text = await ShinCapture.Services.OcrService.ExtractTextAsync(
+                bmp, langTag, _settings.Ocr.UpscaleSmallImages);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                OcrPanelTitle.Text = "추출된 텍스트 없음";
+                OcrTextBox.Text = "";
+                SetStatus("OCR: 텍스트를 찾지 못했습니다");
+                return;
+            }
+
+            OcrTextBox.Text = text;
+            var tagNote = string.Equals(langTag, _settings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
+                ? "" : $" — {langTag} 폴백";
+            OcrPanelTitle.Text = $"추출된 텍스트 ({text.Length}자{tagNote})";
+            SetStatus($"OCR 완료 ({text.Length}자)");
+        }
+        catch (Exception ex)
+        {
+            OcrPanelTitle.Text = "OCR 실패";
+            OcrTextBox.Text = ex.Message;
+            SetStatus("OCR 실패");
+        }
+    }
+
+    private static string? ResolveOcrLanguageForEditor(string preferred)
+    {
+        if (ShinCapture.Services.OcrService.IsLanguageAvailable(preferred)) return preferred;
+        if (ShinCapture.Services.OcrService.IsLanguageAvailable("ko")) return "ko";
+        if (ShinCapture.Services.OcrService.IsLanguageAvailable("en-US")) return "en-US";
+        var list = ShinCapture.Services.OcrService.GetAvailableLanguages();
+        return list.Count > 0 ? list[0] : null;
+    }
+
+    private static System.Drawing.Bitmap BitmapSourceToBitmap(System.Windows.Media.Imaging.BitmapSource source)
+    {
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(source));
+        using var ms = new System.IO.MemoryStream();
+        encoder.Save(ms);
+        ms.Position = 0;
+        return new System.Drawing.Bitmap(ms);
+    }
+
+    private void OnOcrClose(object sender, RoutedEventArgs e)
+    {
+        OcrPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnOcrSelectAll(object sender, RoutedEventArgs e)
+    {
+        OcrTextBox.SelectAll();
+        OcrTextBox.Focus();
+    }
+
+    private void OnOcrCopy(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(OcrTextBox.Text)) return;
+        System.Windows.Clipboard.SetText(OcrTextBox.Text);
+        SetStatus($"텍스트 복사됨 ({OcrTextBox.Text.Length}자)");
     }
 }
