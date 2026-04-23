@@ -1603,6 +1603,9 @@ public partial class EditorWindow : Window
             return;
         }
 
+        // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 → 디스크에서 최신 설정 로드
+        var currentSettings = _settingsManager?.Load() ?? _settings;
+
         SetStatus("OCR 실행 중...");
         OcrPanel.Visibility = Visibility.Visible;
         OcrPanelTitle.Text = "추출된 텍스트 (추출 중…)";
@@ -1610,12 +1613,12 @@ public partial class EditorWindow : Window
 
         try
         {
-            var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
+            var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(currentSettings.Ocr.Language);
             if (langTag == null)
             {
                 OcrPanelTitle.Text = "OCR 언어팩이 필요합니다";
                 OcrTextBox.Text =
-                    $"설정된 언어({_settings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
+                    $"설정된 언어({currentSettings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
                     "Windows 설정 > 시간 및 언어 > 언어에서 언어팩을 설치한 뒤 다시 시도해주세요.";
                 SetStatus("OCR 언어팩 없음");
                 return;
@@ -1623,7 +1626,7 @@ public partial class EditorWindow : Window
 
             using var bmp = BitmapSourceToBitmap(_sourceImage);
             var text = await ShinCapture.Services.OcrService.ExtractTextAsync(
-                bmp, langTag, _settings.Ocr.UpscaleSmallImages);
+                bmp, langTag, currentSettings.Ocr.UpscaleSmallImages);
 
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -1634,7 +1637,7 @@ public partial class EditorWindow : Window
             }
 
             OcrTextBox.Text = text;
-            var tagNote = string.Equals(langTag, _settings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
+            var tagNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
                 ? "" : $" — {langTag} 폴백";
             OcrPanelTitle.Text = $"추출된 텍스트 ({text.Length}자{tagNote})";
             SetStatus($"OCR 완료 ({text.Length}자)");
