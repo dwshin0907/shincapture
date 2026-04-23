@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly SettingsManager _settingsManager;
     private readonly SaveManager _saveManager;
     private AppSettings _settings;
+    private CaptureMode _lastCaptureMode = CaptureMode.Region;
 
     public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
@@ -65,8 +66,8 @@ public partial class MainWindow : Window
     {
         _hotkeyManager.UnregisterAll();
 
-        // Windows Snipping Tool의 PrintScreen 선점 해제 (최초 1회)
-        DisableWindowsSnippingToolPrintScreen();
+        // 설정에 따라 Windows의 PrtSc → Snipping Tool 바인딩을 해제/복원
+        PrintScreenOverrideService.Apply(_settings.Hotkeys.OverridePrintScreen);
 
         // PrintScreen 등록
         int psResult = _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
@@ -80,27 +81,12 @@ public partial class MainWindow : Window
         _hotkeyManager.Register(_settings.Hotkeys.FullscreenCapture, () => StartCapture(CaptureMode.Fullscreen));
         _hotkeyManager.Register(_settings.Hotkeys.ScrollCapture, () => StartCapture(CaptureMode.Scroll));
         _hotkeyManager.Register(_settings.Hotkeys.FixedSizeCapture, () => StartCapture(CaptureMode.FixedSize));
-    }
-
-    /// <summary>Windows 11 캡처 도구(Snipping Tool)의 PrintScreen 선점 해제</summary>
-    private static void DisableWindowsSnippingToolPrintScreen()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"Control Panel\Keyboard", true);
-            if (key != null)
-            {
-                var val = key.GetValue("PrintScreenKeyForSnippingEnabled");
-                if (val is int v && v == 1)
-                    key.SetValue("PrintScreenKeyForSnippingEnabled", 0, Microsoft.Win32.RegistryValueKind.DWord);
-            }
-        }
-        catch { }
+        _hotkeyManager.Register(_settings.Hotkeys.TextCapture, () => StartCapture(CaptureMode.Text));
     }
 
     private void StartCapture(CaptureMode mode)
     {
+        _lastCaptureMode = mode;
         if (mode == CaptureMode.Fullscreen)
         {
             var bitmap = ScreenHelper.CaptureFullScreen();
@@ -124,6 +110,7 @@ public partial class MainWindow : Window
             CaptureMode.FixedSize => new FixedSizeCaptureMode(
                 _settings.FixedSizes?.FirstOrDefault()?.Width  ?? 1280,
                 _settings.FixedSizes?.FirstOrDefault()?.Height ?? 720),
+            CaptureMode.Text => new RegionCaptureMode(),  // 영역 드래그 재사용, OCR 분기는 HandleCaptureResult
             _ => new RegionCaptureMode()
         };
 
@@ -157,6 +144,13 @@ public partial class MainWindow : Window
 
     private void HandleCaptureResult(CaptureResult result)
     {
+        // 텍스트 캡쳐 모드: OCR → 클립보드(텍스트) → 토스트. 이미지 클립보드/편집기 분기 X.
+        if (_lastCaptureMode == CaptureMode.Text)
+        {
+            RunOcrAndNotify(result.Image);
+            return;
+        }
+
         // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통)
         System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
 
@@ -188,6 +182,70 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void RunOcrAndNotify(System.Drawing.Bitmap image)
+    {
+        var langTag = ResolveOcrLanguage(_settings.Ocr.Language);
+        if (langTag == null)
+        {
+            PromptInstallLanguagePack(_settings.Ocr.Language);
+            return;
+        }
+
+        try
+        {
+            var text = await Services.OcrService.ExtractTextAsync(
+                image, langTag, _settings.Ocr.UpscaleSmallImages);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _trayIcon.ShowBalloonTip(3000, "신캡쳐", "텍스트를 찾지 못했습니다", System.Windows.Forms.ToolTipIcon.Info);
+                return;
+            }
+
+            System.Windows.Clipboard.SetText(text);
+            var preview = text.Length > 40 ? text[..40] + "…" : text;
+            _trayIcon.ShowBalloonTip(3000, "신캡쳐 — 텍스트 복사됨",
+                $"{text.Length}자: {preview}", System.Windows.Forms.ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            _trayIcon.ShowBalloonTip(4000, "신캡쳐 — OCR 실패",
+                ex.Message, System.Windows.Forms.ToolTipIcon.Error);
+        }
+    }
+
+    private static string? ResolveOcrLanguage(string preferred)
+    {
+        if (Services.OcrService.IsLanguageAvailable(preferred)) return preferred;
+        if (Services.OcrService.IsLanguageAvailable("ko")) return "ko";
+        if (Services.OcrService.IsLanguageAvailable("en-US")) return "en-US";
+        var list = Services.OcrService.GetAvailableLanguages();
+        return list.Count > 0 ? list[0] : null;
+    }
+
+    private void PromptInstallLanguagePack(string langTag)
+    {
+        var result = System.Windows.MessageBox.Show(
+            $"OCR 언어팩이 설치되어 있지 않습니다 ({langTag}).\n\n" +
+            "Windows 설정에서 언어팩을 설치하시겠습니까?\n" +
+            "(예 → Windows 설정 '시간 및 언어 > 언어' 화면 열기)",
+            "신캡쳐 — OCR 언어팩 필요",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information);
+        if (result == System.Windows.MessageBoxResult.Yes)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "ms-settings:regionlanguage",
+                    UseShellExecute = true
+                });
+            }
+            catch { }
+        }
+    }
+
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
@@ -198,6 +256,7 @@ public partial class MainWindow : Window
         menu.Items.Add("⊡ 전체화면 캡쳐\tCtrl+Shift+A", null, (_, _) => StartCapture(CaptureMode.Fullscreen));
         menu.Items.Add("↕ 스크롤 캡쳐\tCtrl+Shift+S", null, (_, _) => StartCapture(CaptureMode.Scroll));
         menu.Items.Add("⊞ 지정사이즈 캡쳐\tCtrl+Shift+Z", null, (_, _) => StartCapture(CaptureMode.FixedSize));
+        menu.Items.Add("🔤 텍스트 캡쳐\tCtrl+Shift+T", null, (_, _) => StartCapture(CaptureMode.Text));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("✏ 편집기 열기", null, (_, _) => ShowEditor());
         menu.Items.Add("📁 저장 폴더 열기", null, (_, _) => OpenSaveFolder());
