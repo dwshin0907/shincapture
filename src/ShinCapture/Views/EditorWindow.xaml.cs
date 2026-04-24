@@ -125,6 +125,14 @@ public partial class EditorWindow : Window
         Canvas.FitToView();
         BuildHistory();
         UpdateStatus();
+
+        // 새 캡쳐에는 이전 OCR 결과 숨김
+        if (OcrPanel != null)
+        {
+            OcrPanel.Visibility = Visibility.Collapsed;
+            OcrTextBox.Text = "";
+            OcrPanelTitle.Text = "추출된 텍스트";
+        }
     }
 
     /// <summary>기록에서 이미지를 메인 화면에 로드</summary>
@@ -306,7 +314,6 @@ public partial class EditorWindow : Window
             ("번호",    "\u2460", "effect", "N"),   // ①
             ("이미지",  "\u229E", "insert", "I"),   // ⊞
             ("색상추출","\u2316", "insert", ""),    // ⌖
-            ("OCR",     "\U0001F524", "insert", ""), // 🔤 텍스트 추출
             ("크롭",    "\u2702", "edit",   "C"),   // ✂
             ("지우개",  "\u2312", "edit",   "E"),   // ⌒
         };
@@ -319,19 +326,18 @@ public partial class EditorWindow : Window
 
             var tip = string.IsNullOrEmpty(sc) ? name : $"{name} ({sc})";
             var btn = CreateToolButton(icon, tip);
-            if (name == "OCR")
-            {
-                btn.ToolTip = "텍스트 추출 (OCR)";
-                btn.Click += (_, _) => RunEditorOcr();
-            }
-            else
-            {
-                btn.Click += (_, _) => SelectTool(name);
-            }
+            btn.Click += (_, _) => SelectTool(name);
             ToolbarPanel.Children.Add(btn);
             _toolButtons[name] = btn;
             lastGroup = group;
         }
+
+        ToolbarPanel.Children.Add(CreateSeparator());
+
+        // OCR 강조 버튼 — 드로잉 도구가 아닌 액션 버튼이라 별도 스타일
+        var ocrBtn = CreateOcrActionButton();
+        ToolbarPanel.Children.Add(ocrBtn);
+        _toolButtons["OCR"] = ocrBtn;
 
         ToolbarPanel.Children.Add(CreateSeparator());
 
@@ -591,6 +597,39 @@ public partial class EditorWindow : Window
             Margin = new Thickness(6, 0, 6, 0),
             Background = (System.Windows.Media.Brush)FindResource("DividerBrush")
         };
+    }
+
+    private Button CreateOcrActionButton()
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock
+        {
+            Text = "\U0001F524",  // 🔤
+            FontSize = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0)
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = "텍스트 추출",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btn = new Button
+        {
+            Content = sp,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(2, 1, 2, 1),
+            Background = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Foreground = System.Windows.Media.Brushes.White,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
+        };
+        btn.Click += (_, _) => RunEditorOcr();
+        return btn;
     }
 
     // 속성 패널 상태
