@@ -159,8 +159,8 @@
                     </StackPanel>
 
                     <CheckBox x:Name="ChkOcrUpscale" Grid.Row="11" Grid.ColumnSpan="2"
-                              Content="작은 이미지 자동 업스케일 (40px 미만)"
-                              ToolTip="작은 텍스트 인식률을 높이기 위해 40px 미만 이미지를 2배로 확대한 뒤 OCR을 실행합니다."/>
+                              Content="OCR 인식률 향상 전처리"
+                              ToolTip="OCR 실행 전에 작은 이미지 업스케일, 어두운 배경 자동 반전 등을 적용합니다. 원본 캡쳐 이미지에는 영향 없음. 보통 켜두는 것을 권장합니다."/>
                 </Grid>
             </TabItem>
 

@@ -19,13 +19,14 @@ namespace ShinCapture.Services;
 /// </summary>
 public static class OcrService
 {
-    /// <summary>지정 언어로 OCR 실행. 작은 이미지는 자동 업스케일(기본 true).</summary>
+    /// <summary>지정 언어로 OCR 실행. 이미지 전처리(업스케일 + 자동 반전) 활성화(기본 true).</summary>
     public static Task<string> ExtractTextAsync(Bitmap image, string langTag)
-        => ExtractTextAsync(image, langTag, upscaleSmall: true);
+        => ExtractTextAsync(image, langTag, preprocess: true);
 
     /// <summary>지정 언어로 OCR 실행.</summary>
+    /// <param name="preprocess">true면 OCR 친화적 전처리(업스케일, 어두운 배경 자동 반전) 적용.</param>
     /// <exception cref="InvalidOperationException">해당 언어팩이 설치되어 있지 않을 때</exception>
-    public static async Task<string> ExtractTextAsync(Bitmap image, string langTag, bool upscaleSmall)
+    public static async Task<string> ExtractTextAsync(Bitmap image, string langTag, bool preprocess)
     {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (string.IsNullOrWhiteSpace(langTag)) throw new ArgumentException("langTag empty", nameof(langTag));
@@ -35,18 +36,13 @@ public static class OcrService
             ?? throw new InvalidOperationException($"OCR 언어팩이 설치되지 않았습니다: {langTag}");
 
         Bitmap target = image;
-        Bitmap? upscaled = null;
+        Bitmap? processed = null;
         try
         {
-            if (upscaleSmall && (image.Width < 40 || image.Height < 40))
+            if (preprocess)
             {
-                upscaled = new Bitmap(image.Width * 2, image.Height * 2);
-                using (var g = Graphics.FromImage(upscaled))
-                {
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(image, 0, 0, upscaled.Width, upscaled.Height);
-                }
-                target = upscaled;
+                processed = PreprocessForOcr(image);
+                if (processed != null) target = processed;
             }
 
             var softwareBitmap = await BitmapToSoftwareBitmapAsync(target);
@@ -55,7 +51,7 @@ public static class OcrService
         }
         finally
         {
-            upscaled?.Dispose();
+            processed?.Dispose();
         }
     }
 
@@ -96,5 +92,82 @@ public static class OcrService
         ms.Position = 0;
         var decoder = await BitmapDecoder.CreateAsync(ms.AsRandomAccessStream());
         return await decoder.GetSoftwareBitmapAsync();
+    }
+
+    /// <summary>
+    /// OCR 인식률 향상을 위한 이미지 전처리 체인.
+    /// 1. 공격적 업스케일 — Windows.Media.Ocr은 텍스트 높이 20~40px에서 최적. 작은 이미지는 3~4배 확대.
+    /// 2. 어두운 배경 자동 반전 — Windows OCR은 "흰 배경 검은 글씨" 기준 학습. 다크 테마 캡쳐는 반전 시 인식률 크게 향상.
+    /// </summary>
+    private static Bitmap? PreprocessForOcr(Bitmap source)
+    {
+        int minDim = Math.Min(source.Width, source.Height);
+        double scale = minDim switch
+        {
+            < 50  => 4.0,
+            < 100 => 3.0,
+            < 200 => 2.0,
+            _     => 1.0
+        };
+
+        int newW = Math.Max(1, (int)(source.Width * scale));
+        int newH = Math.Max(1, (int)(source.Height * scale));
+
+        // 스케일 == 1이고 반전도 불필요한 경우 null 반환 → 호출자는 원본을 그대로 사용
+        bool needInvert = IsDarkDominant(source);
+        if (scale == 1.0 && !needInvert) return null;
+
+        var scaled = new Bitmap(newW, newH, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(scaled))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            if (needInvert)
+            {
+                var matrix = new ColorMatrix(new float[][]
+                {
+                    new float[] { -1,  0,  0, 0, 0 },
+                    new float[] {  0, -1,  0, 0, 0 },
+                    new float[] {  0,  0, -1, 0, 0 },
+                    new float[] {  0,  0,  0, 1, 0 },
+                    new float[] {  1,  1,  1, 0, 1 }
+                });
+                using var attrs = new ImageAttributes();
+                attrs.SetColorMatrix(matrix);
+                g.DrawImage(source,
+                    new Rectangle(0, 0, newW, newH),
+                    0, 0, source.Width, source.Height,
+                    GraphicsUnit.Pixel, attrs);
+            }
+            else
+            {
+                g.DrawImage(source, 0, 0, newW, newH);
+            }
+        }
+        return scaled;
+    }
+
+    /// <summary>
+    /// 격자 샘플링으로 평균 명도를 계산. 128 미만이면 어두운 배경으로 판단.
+    /// </summary>
+    private static bool IsDarkDominant(Bitmap bmp)
+    {
+        int stepX = Math.Max(1, bmp.Width / 10);
+        int stepY = Math.Max(1, bmp.Height / 10);
+        int samples = 0;
+        long totalBrightness = 0;
+        for (int y = 0; y < bmp.Height; y += stepY)
+        {
+            for (int x = 0; x < bmp.Width; x += stepX)
+            {
+                var c = bmp.GetPixel(x, y);
+                // 표준 휘도 가중치 (Rec. 601)
+                int brightness = (c.R * 299 + c.G * 587 + c.B * 114) / 1000;
+                totalBrightness += brightness;
+                samples++;
+            }
+        }
+        return samples > 0 && (totalBrightness / samples) < 128;
     }
 }
