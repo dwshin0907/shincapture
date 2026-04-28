@@ -154,21 +154,16 @@ public partial class MainWindow : Window
             RunOcrAndNotify(result.Image);
             return;
         }
-        if (_lastCaptureMode == CaptureMode.Translate)
-        {
-            RunOcrAndTranslateAndNotify(result.Image);
-            return;
-        }
-
         // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통)
         System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
 
         switch (_settings.Capture.AfterCapture)
         {
             case AfterCaptureAction.OpenEditor:
+                bool autoOcr = (_lastCaptureMode == CaptureMode.Translate);
                 if (_editorWindow != null)
                 {
-                    _editorWindow.LoadNewCapture(result.Image);
+                    _editorWindow.LoadNewCapture(result.Image, autoOcr);
                     _editorWindow.Show();
                     _editorWindow.WindowState = WindowState.Normal;
                     _editorWindow.Topmost = true;
@@ -178,6 +173,10 @@ public partial class MainWindow : Window
                 else
                 {
                     _editorWindow = new EditorWindow(result.Image, _saveManager, _settings, _settingsManager);
+                    if (autoOcr)
+                        _editorWindow.Loaded += (_, _) =>
+                            _editorWindow.Dispatcher.BeginInvoke(new Action(() => _editorWindow.TriggerAutoOcr()),
+                                System.Windows.Threading.DispatcherPriority.Background);
                     _editorWindow.Show();
                     _editorWindow.Activate();
                 }
@@ -220,88 +219,6 @@ public partial class MainWindow : Window
         {
             _trayIcon.ShowBalloonTip(4000, "신캡쳐 — OCR 실패",
                 ex.Message, System.Windows.Forms.ToolTipIcon.Error);
-        }
-    }
-
-    private async void RunOcrAndTranslateAndNotify(System.Drawing.Bitmap image)
-    {
-        var langTag = Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
-        if (langTag == null)
-        {
-            PromptInstallLanguagePack(_settings.Ocr.Language);
-            return;
-        }
-
-        string text;
-        try
-        {
-            text = await Services.OcrService.ExtractTextAsync(image, langTag, _settings.Ocr.UpscaleSmallImages);
-        }
-        catch (Exception ex)
-        {
-            _trayIcon.ShowBalloonTip(3000, "신캡쳐 OCR 실패", ex.Message, System.Windows.Forms.ToolTipIcon.Error);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            _trayIcon.ShowBalloonTip(3000, "신캡쳐", "텍스트를 찾지 못했습니다", System.Windows.Forms.ToolTipIcon.Info);
-            return;
-        }
-
-        if (!_settings.Ai.Enabled)
-        {
-            _trayIcon.ShowBalloonTip(4000, "신캡쳐 — AI 기능 비활성", "설정 > AI 탭에서 키를 입력하고 활성화하세요", System.Windows.Forms.ToolTipIcon.Warning);
-            OpenSettings();
-            return;
-        }
-
-        var store = new Services.Ai.DpapiCredentialStore();
-        if (!store.HasKey())
-        {
-            _trayIcon.ShowBalloonTip(4000, "신캡쳐 — AI 키 필요", "설정 > AI 탭에서 OpenAI 키를 입력하세요", System.Windows.Forms.ToolTipIcon.Warning);
-            OpenSettings();
-            return;
-        }
-
-        var openAi = Services.Ai.OpenAiClient.CreateDefault(_settings.Ai.TimeoutSeconds);
-        var svc = new Services.Ai.TranslationService(store, openAi);
-
-        Services.Ai.TranslationResult tr;
-        try
-        {
-            tr = await svc.TranslateAsync(text, _settings.Ai.TargetLanguage, _settings.Ai.Model);
-        }
-        catch (Services.Ai.OpenAiException ex)
-        {
-            var msg = ex.Kind switch
-            {
-                Services.Ai.OpenAiErrorKind.InvalidKey => "키가 유효하지 않습니다",
-                Services.Ai.OpenAiErrorKind.RateLimited => "OpenAI 사용 한도 초과",
-                Services.Ai.OpenAiErrorKind.ModelNotFound => "모델명 오류, 설정 확인",
-                Services.Ai.OpenAiErrorKind.Network => "네트워크 연결 확인",
-                Services.Ai.OpenAiErrorKind.Timeout => "응답 지연, 다시 시도",
-                Services.Ai.OpenAiErrorKind.ServerError => "OpenAI 일시 장애",
-                _ => "예상치 못한 응답"
-            };
-            _trayIcon.ShowBalloonTip(3500, "신캡쳐 — 번역 실패", msg, System.Windows.Forms.ToolTipIcon.Error);
-            return;
-        }
-
-        switch (tr.Outcome)
-        {
-            case Services.Ai.TranslationOutcome.SkippedSameLanguage:
-                System.Windows.Clipboard.SetText(text);
-                _trayIcon.ShowBalloonTip(3000, "신캡쳐", $"이미 {_settings.Ai.TargetLanguage}입니다 (원문 복사됨)", System.Windows.Forms.ToolTipIcon.Info);
-                break;
-            case Services.Ai.TranslationOutcome.Success:
-                System.Windows.Clipboard.SetText(tr.TranslatedText);
-                var preview = tr.TranslatedText.Length > 40 ? tr.TranslatedText[..40] + "…" : tr.TranslatedText;
-                _trayIcon.ShowBalloonTip(3500, "신캡쳐 — 번역 복사됨", preview, System.Windows.Forms.ToolTipIcon.Info);
-                break;
-            default:
-                // SkippedEmpty/NoKey 등은 위에서 이미 처리했지만 안전망
-                break;
         }
     }
 

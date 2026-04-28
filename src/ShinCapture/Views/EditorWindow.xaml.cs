@@ -105,7 +105,8 @@ public partial class EditorWindow : Window
     }
 
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
-    public void LoadNewCapture(Bitmap capturedImage)
+    /// <param name="autoOcr">true이면 로드 직후 OCR을 자동 실행 (Translate 모드 전용)</param>
+    public void LoadNewCapture(Bitmap capturedImage, bool autoOcr = false)
     {
         // 현재 편집 상태 저장
         SaveCurrentObjects();
@@ -138,6 +139,18 @@ public partial class EditorWindow : Window
             OcrTranslatedPanel.Visibility = Visibility.Collapsed;
             OcrTranslatedBox.Text = "";
         }
+
+        if (autoOcr)
+        {
+            Dispatcher.BeginInvoke(new Action(RunEditorOcr),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>외부(MainWindow)에서 OCR 자동 실행을 트리거할 때 사용 (새 EditorWindow 생성 시)</summary>
+    public void TriggerAutoOcr()
+    {
+        RunEditorOcr();
     }
 
     /// <summary>기록에서 이미지를 메인 화면에 로드</summary>
