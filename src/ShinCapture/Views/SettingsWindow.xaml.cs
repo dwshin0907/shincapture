@@ -6,6 +6,7 @@ using System.Windows;
 using Microsoft.Win32;
 using ShinCapture.Models;
 using ShinCapture.Services;
+using ShinCapture.Services.Ai;
 
 namespace ShinCapture.Views;
 
@@ -14,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly SettingsManager _settingsManager;
     private AppSettings _settings;
     private ObservableCollection<FixedSizePreset> _fixedSizes = new();
+    private readonly DpapiCredentialStore _aiStore = new();
 
     public SettingsWindow(SettingsManager settingsManager)
     {
@@ -73,6 +75,21 @@ public partial class SettingsWindow : Window
                 Height = p.Height
             }) ?? Enumerable.Empty<FixedSizePreset>());
         GridFixedSizes.ItemsSource = _fixedSizes;
+
+        // AI
+        AiEnabledCheckBox.IsChecked = _settings.Ai.Enabled;
+        AiModelBox.Text = _settings.Ai.Model;
+        foreach (System.Windows.Controls.ComboBoxItem item in AiTargetLangBox.Items)
+        {
+            if ((string)item.Tag == _settings.Ai.TargetLanguage)
+            {
+                AiTargetLangBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (AiTargetLangBox.SelectedItem == null && AiTargetLangBox.Items.Count > 0)
+            AiTargetLangBox.SelectedIndex = 0;
+        UpdateAiKeyStatus();
     }
 
     private void PopulateOcrLanguages(string selectedTag)
@@ -141,6 +158,12 @@ public partial class SettingsWindow : Window
         if (!string.IsNullOrEmpty(ocrLangTag))
             _settings.Ocr.Language = ocrLangTag;
         _settings.Ocr.UpscaleSmallImages = ChkOcrUpscale.IsChecked == true;
+
+        // AI
+        _settings.Ai.Enabled = AiEnabledCheckBox.IsChecked == true;
+        _settings.Ai.Model = string.IsNullOrWhiteSpace(AiModelBox.Text) ? "gpt-4o-mini" : AiModelBox.Text.Trim();
+        if (AiTargetLangBox.SelectedItem is System.Windows.Controls.ComboBoxItem aiItem && aiItem.Tag is string aiTag)
+            _settings.Ai.TargetLanguage = aiTag;
 
         // 지정사이즈
         _settings.FixedSizes = _fixedSizes.ToList();
@@ -211,5 +234,101 @@ public partial class SettingsWindow : Window
             });
         }
         catch { }
+    }
+
+    private void UpdateAiKeyStatus()
+    {
+        if (_aiStore.HasKey())
+        {
+            AiKeyStatusText.Text = "✓ 저장된 키 있음 (검증 버튼으로 확인)";
+            AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Green;
+        }
+        else
+        {
+            AiKeyStatusText.Text = "키 미설정";
+            AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+        }
+    }
+
+    private void OnAiKeyShowClick(object sender, RoutedEventArgs e)
+    {
+        // PasswordBox 평문 토글: ToolTip으로 3초 노출
+        AiKeyBox.ToolTip = AiKeyBox.Password;
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        t.Tick += (_, _) => { AiKeyBox.ToolTip = null; t.Stop(); };
+        t.Start();
+    }
+
+    private async void OnAiKeyValidateClick(object sender, RoutedEventArgs e)
+    {
+        var key = AiKeyBox.Password;
+        AiKeyStatusText.Text = "검증 중…";
+        AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+
+        AiKeyHandle? handle;
+        bool persistFromBox;
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            handle = _aiStore.AcquireKey();
+            persistFromBox = false;
+            if (handle == null)
+            {
+                AiKeyStatusText.Text = "검증할 키가 없습니다";
+                AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Red;
+                return;
+            }
+        }
+        else
+        {
+            handle = new AiKeyHandle(key);
+            persistFromBox = true;
+        }
+
+        try
+        {
+            var client = OpenAiClient.CreateDefault(timeoutSeconds: 10);
+            var ok = await client.ValidateKeyAsync(handle);
+            if (ok)
+            {
+                if (persistFromBox)
+                {
+                    _aiStore.SaveKey(AiKeyBox.Password);
+                    AiKeyBox.Password = ""; // 평문 흔적 제거
+                }
+                AiKeyStatusText.Text = $"✓ 키 유효 (검증: {DateTime.Now:HH:mm:ss})";
+                AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Green;
+                UpdateAiKeyStatus();
+            }
+            else
+            {
+                AiKeyStatusText.Text = "✗ 키 검증 실패";
+                AiKeyStatusText.Foreground = System.Windows.Media.Brushes.Red;
+            }
+        }
+        finally
+        {
+            handle.Dispose();
+        }
+    }
+
+    private void OnAiKeyDeleteClick(object sender, RoutedEventArgs e)
+    {
+        var r = MessageBox.Show("저장된 OpenAI 키를 삭제할까요?", "신캡쳐",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r != MessageBoxResult.Yes) return;
+        _aiStore.DeleteKey();
+        AiKeyBox.Password = "";
+        AiEnabledCheckBox.IsChecked = false;
+        UpdateAiKeyStatus();
+    }
+
+    private void OnHyperlinkRequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = e.Uri.AbsoluteUri,
+            UseShellExecute = true
+        });
+        e.Handled = true;
     }
 }

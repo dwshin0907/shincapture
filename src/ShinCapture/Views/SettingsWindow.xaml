@@ -191,6 +191,76 @@
                     </StackPanel>
                 </Grid>
             </TabItem>
+
+            <!-- AI 탭 -->
+            <TabItem Header="AI">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel>
+                        <CheckBox x:Name="AiEnabledCheckBox" Content="AI 기능 활성화" Margin="0,0,0,16" FontSize="14"/>
+
+                        <TextBlock Text="제공자: OpenAI" FontWeight="Bold" Margin="0,0,0,8"/>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="API 키:" VerticalAlignment="Center"/>
+                            <PasswordBox x:Name="AiKeyBox" Grid.Column="1" Margin="4,0"/>
+                            <Button x:Name="AiKeyShowBtn" Grid.Column="2" Content="👁" Width="32" Margin="2,0" Click="OnAiKeyShowClick"/>
+                            <Button x:Name="AiKeyValidateBtn" Grid.Column="3" Content="검증" Width="60" Margin="2,0" Click="OnAiKeyValidateClick"/>
+                            <Button x:Name="AiKeyDeleteBtn" Grid.Column="4" Content="삭제" Width="60" Margin="2,0" Click="OnAiKeyDeleteClick"/>
+                        </Grid>
+                        <TextBlock x:Name="AiKeyStatusText" Margin="84,0,0,8" Foreground="#666"/>
+                        <TextBlock Margin="84,0,0,16">
+                            <Hyperlink NavigateUri="https://platform.openai.com/api-keys" RequestNavigate="OnHyperlinkRequestNavigate">OpenAI 키 발급받기 →</Hyperlink>
+                        </TextBlock>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="모델:" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="AiModelBox" Grid.Column="1" IsEditable="True" Margin="4,0">
+                                <ComboBoxItem>gpt-4o-mini</ComboBoxItem>
+                                <ComboBoxItem>gpt-4o</ComboBoxItem>
+                                <ComboBoxItem>gpt-4.1</ComboBoxItem>
+                            </ComboBox>
+                        </Grid>
+                        <TextBlock Text="예상 비용: 1회 ≈ $0.0001 (1만 회 ≈ $1)" Margin="84,0,0,16" FontSize="11" Foreground="#888"/>
+
+                        <TextBlock Text="번역" FontWeight="Bold" Margin="0,8,0,8"/>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="대상 언어:" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="AiTargetLangBox" Grid.Column="1" Margin="4,0">
+                                <ComboBoxItem Tag="ko">한국어</ComboBoxItem>
+                                <ComboBoxItem Tag="en">영어</ComboBoxItem>
+                                <ComboBoxItem Tag="ja">일본어</ComboBoxItem>
+                                <ComboBoxItem Tag="zh">중국어 (간체)</ComboBoxItem>
+                            </ComboBox>
+                        </Grid>
+
+                        <Border BorderBrush="#DDD" BorderThickness="1" Padding="12" Background="#FAFAFA">
+                            <StackPanel>
+                                <TextBlock Text="보안 안내" FontWeight="Bold" Margin="0,0,0,4"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#444">
+                                    키는 이 PC의 Windows 사용자 계정에만 DPAPI로 암호화 저장됩니다.<LineBreak/>
+                                    파일을 다른 PC로 복사해도 사용할 수 없습니다.<LineBreak/>
+                                    ⚠ 같은 사용자 권한으로 실행되는 멀웨어가 있다면 어떤 OS 암호화도 우회될 수 있습니다.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
         </TabControl>
 
         <!-- 하단 버튼 -->
