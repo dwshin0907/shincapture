@@ -116,4 +116,28 @@ public class SettingsManagerTests : IDisposable
         Assert.Equal("en-US", loaded.Ocr.Language);
         Assert.False(loaded.Ocr.UpscaleSmallImages);
     }
+
+    [Fact]
+    public void RoundTrip_PreservesAiSettings()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "shincap_test_" + Guid.NewGuid());
+        try
+        {
+            var mgr = new SettingsManager(dir);
+            var s = new AppSettings();
+            s.Ai.Enabled = true;
+            s.Ai.Model = "gpt-4o-mini";
+            s.Ai.TargetLanguage = "ko";
+            mgr.Save(s);
+
+            var loaded = new SettingsManager(dir).Load();
+            Assert.True(loaded.Ai.Enabled);
+            Assert.Equal("gpt-4o-mini", loaded.Ai.Model);
+            Assert.Equal("ko", loaded.Ai.TargetLanguage);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
 }

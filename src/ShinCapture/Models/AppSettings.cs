@@ -11,6 +11,7 @@ public class AppSettings
     public SaveSettings Save { get; set; } = new();
     public HotkeySettings Hotkeys { get; set; } = new();
     public OcrSettings Ocr { get; set; } = new();
+    public AiSettings Ai { get; set; } = new();
     public List<FixedSizePreset>? FixedSizes { get; set; } = new()
     {
         new() { Name = "HD", Width = 1280, Height = 720 },
@@ -71,4 +72,14 @@ public class OcrSettings
 {
     public string Language { get; set; } = "ko";
     public bool UpscaleSmallImages { get; set; } = true;
+}
+
+public class AiSettings
+{
+    public bool Enabled { get; set; } = false;
+    public string Provider { get; set; } = "openai";
+    public string Model { get; set; } = "gpt-4o-mini";
+    public string TargetLanguage { get; set; } = "ko";
+    public int TimeoutSeconds { get; set; } = 15;
+    public DateTime? LastValidatedAt { get; set; } = null;
 }
