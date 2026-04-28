@@ -91,4 +91,18 @@ public class TranslationServiceTests
         Assert.Equal("gpt-4o", ai.LastRequest!.Model);
         Assert.Contains("ja", ai.LastRequest.Messages[0].Content); // 시스템 프롬프트에 대상 언어 포함
     }
+
+    [Fact]
+    public async Task Translate_EmptyChoices_ThrowsParseFailed()
+    {
+        var store = new FakeStore { Plaintext = "sk-x" };
+        var ai = new FakeOpenAi
+        {
+            Responder = req => new ChatResponse { Choices = new System.Collections.Generic.List<ChatChoice>() }
+        };
+        var s = new TranslationService(store, ai);
+        var ex = await Assert.ThrowsAsync<OpenAiException>(
+            () => s.TranslateAsync("hello", "ko", "gpt-4o-mini"));
+        Assert.Equal(OpenAiErrorKind.ParseFailed, ex.Kind);
+    }
 }

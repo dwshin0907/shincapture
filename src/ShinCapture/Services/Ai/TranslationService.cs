@@ -49,7 +49,9 @@ public sealed class TranslationService
         };
 
         var resp = await _openAi.PostChatAsync(req, key, ct).ConfigureAwait(false);
-        var translated = resp.Choices?[0]?.Message?.Content?.Trim() ?? "";
+        if (resp.Choices == null || resp.Choices.Count == 0)
+            throw new OpenAiException(OpenAiErrorKind.ParseFailed, "응답에 choices가 없습니다");
+        var translated = resp.Choices[0]?.Message?.Content?.Trim() ?? "";
 
         if (string.Equals(translated, text.Trim(), StringComparison.Ordinal))
         {

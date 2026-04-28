@@ -1654,6 +1654,11 @@ public partial class EditorWindow : Window
         OcrPanel.Visibility = Visibility.Visible;
         OcrPanelTitle.Text = "추출된 텍스트 (추출 중…)";
         OcrTextBox.Text = "";
+        if (OcrTranslatedPanel != null)
+        {
+            OcrTranslatedPanel.Visibility = Visibility.Collapsed;
+            OcrTranslatedBox.Text = "";
+        }
 
         try
         {

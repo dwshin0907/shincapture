@@ -53,6 +53,9 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        VersionLabel.Text = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
+
         _hotkeyManager.Initialize(this);
         RegisterHotkeys();
         PopulateCaptureGrid();
@@ -407,9 +410,11 @@ public partial class MainWindow : Window
             Text = "신캡쳐 (ShinCapture)",
             FontSize = 20, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2)
         });
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionStr = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
         sp.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Text = "v1.0.0 — 무료 스크린캡쳐 & 편집 도구",
+            Text = $"{versionStr} — 무료 스크린캡쳐 & 편집 도구",
             FontSize = 12, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 16)
         });
