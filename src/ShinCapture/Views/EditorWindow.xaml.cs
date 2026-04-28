@@ -133,6 +133,11 @@ public partial class EditorWindow : Window
             OcrTextBox.Text = "";
             OcrPanelTitle.Text = "추출된 텍스트";
         }
+        if (OcrTranslatedPanel != null)
+        {
+            OcrTranslatedPanel.Visibility = Visibility.Collapsed;
+            OcrTranslatedBox.Text = "";
+        }
     }
 
     /// <summary>기록에서 이미지를 메인 화면에 로드</summary>
@@ -1715,5 +1720,72 @@ public partial class EditorWindow : Window
         if (string.IsNullOrEmpty(OcrTextBox.Text)) return;
         System.Windows.Clipboard.SetText(OcrTextBox.Text);
         SetStatus($"텍스트 복사됨 ({OcrTextBox.Text.Length}자)");
+    }
+
+    private async void OnOcrTranslateClick(object sender, RoutedEventArgs e)
+    {
+        var text = OcrTextBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            SetStatus("번역: 추출된 텍스트가 없습니다");
+            return;
+        }
+
+        var settings = _settingsManager?.Load() ?? _settings;
+        if (!settings.Ai.Enabled)
+        {
+            SetStatus("번역: 설정 > AI 탭에서 활성화 필요");
+            return;
+        }
+
+        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
+        if (!store.HasKey())
+        {
+            SetStatus("번역: AI 키가 필요합니다 (설정 > AI)");
+            return;
+        }
+
+        string targetLang = settings.Ai.TargetLanguage;
+        if (OcrTranslateLangBox.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
+            targetLang = tag;
+
+        OcrTranslatedPanel.Visibility = Visibility.Visible;
+        OcrTranslatedBox.Text = "번역 중…";
+        SetStatus("번역 실행 중…");
+
+        var openAi = ShinCapture.Services.Ai.OpenAiClient.CreateDefault(settings.Ai.TimeoutSeconds);
+        var svc = new ShinCapture.Services.Ai.TranslationService(store, openAi);
+
+        try
+        {
+            var r = await svc.TranslateAsync(text, targetLang, settings.Ai.Model);
+            switch (r.Outcome)
+            {
+                case ShinCapture.Services.Ai.TranslationOutcome.Success:
+                    OcrTranslatedBox.Text = r.TranslatedText;
+                    SetStatus($"번역 완료 ({r.TranslatedText.Length}자, {targetLang})");
+                    break;
+                case ShinCapture.Services.Ai.TranslationOutcome.SkippedSameLanguage:
+                    OcrTranslatedBox.Text = r.OriginalText;
+                    SetStatus($"이미 {targetLang}입니다");
+                    break;
+                default:
+                    OcrTranslatedBox.Text = "(번역 결과 없음)";
+                    SetStatus("번역 결과 없음");
+                    break;
+            }
+        }
+        catch (ShinCapture.Services.Ai.OpenAiException ex)
+        {
+            OcrTranslatedBox.Text = $"번역 실패: {ex.Message}";
+            SetStatus($"번역 실패 — {ex.Kind}");
+        }
+    }
+
+    private void OnOcrTranslatedCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(OcrTranslatedBox.Text)) return;
+        System.Windows.Clipboard.SetText(OcrTranslatedBox.Text);
+        SetStatus($"번역문 복사됨 ({OcrTranslatedBox.Text.Length}자)");
     }
 }

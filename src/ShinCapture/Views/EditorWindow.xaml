@@ -99,6 +99,8 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,0,0,6">
                     <TextBlock x:Name="OcrPanelTitle" Text="추출된 텍스트"
@@ -118,6 +120,47 @@
                     <Button x:Name="OcrCopyBtn" Content="복사" Padding="14,3"
                             Style="{DynamicResource AccentButton}" Click="OnOcrCopy"/>
                 </StackPanel>
+                <!-- 번역 버튼 + 언어 선택 -->
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                            Margin="0,6,0,0">
+                    <ComboBox x:Name="OcrTranslateLangBox" Width="120" Margin="0,0,6,0"
+                              VerticalAlignment="Center">
+                        <ComboBoxItem Tag="ko">한국어</ComboBoxItem>
+                        <ComboBoxItem Tag="en">영어</ComboBoxItem>
+                        <ComboBoxItem Tag="ja">일본어</ComboBoxItem>
+                        <ComboBoxItem Tag="zh">중국어 (간체)</ComboBoxItem>
+                    </ComboBox>
+                    <Button x:Name="OcrTranslateBtn" Content="🌐 번역" Padding="14,3"
+                            Style="{DynamicResource AccentButton}" Click="OnOcrTranslateClick"/>
+                </StackPanel>
+                <!-- 번역 결과 패널 (기본 숨김) -->
+                <Border Grid.Row="4" x:Name="OcrTranslatedPanel" Visibility="Collapsed"
+                        Margin="0,8,0,0"
+                        Background="{DynamicResource BackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        Padding="8,6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                            <TextBlock x:Name="OcrTranslatedTitle" Text="번역"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBox Grid.Row="1" x:Name="OcrTranslatedBox"
+                                 IsReadOnly="True" AcceptsReturn="True"
+                                 TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                 MinHeight="60" MaxHeight="160"
+                                 FontFamily="Consolas"/>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Margin="0,6,0,0">
+                            <Button Content="번역문 복사" Padding="10,3"
+                                    Click="OnOcrTranslatedCopyClick"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
