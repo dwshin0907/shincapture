@@ -57,6 +57,7 @@ public class HotkeySettings
     public string ScrollCapture { get; set; } = "Ctrl+Shift+S";
     public string FixedSizeCapture { get; set; } = "Ctrl+Shift+Z";
     public string TextCapture { get; set; } = "Ctrl+Shift+T";
+    public string TranslateCapture { get; set; } = "Ctrl+Shift+L";
 
     // true: PrintScreen 키를 신캡쳐가 독점 (Windows Snipping Tool 선점 해제)
     // false: Windows 기본 동작에 양보 (PrintScreen → Snipping Tool)
