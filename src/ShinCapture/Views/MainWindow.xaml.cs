@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         _saveManager = saveManager;
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
+        _settingsManager.SettingsChanged += OnExternalSettingsChanged;
 
         Icon? trayIcon = null;
         try
@@ -484,6 +485,17 @@ public partial class MainWindow : Window
             btn.Click += (_, _) => StartCapture(localMode);
             CaptureModesPanel.Items.Add(btn);
         }
+    }
+
+    private void OnExternalSettingsChanged(object? sender, EventArgs e)
+    {
+        // SettingsManager.Save() raises this event after persisting to disk.
+        // Marshal to UI thread (event source thread is whoever called Save).
+        Dispatcher.Invoke(() =>
+        {
+            _settings = _settingsManager.Load();
+            RegisterHotkeys();
+        });
     }
 
     private void ExitApplication()
