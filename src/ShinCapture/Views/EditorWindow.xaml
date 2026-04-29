@@ -183,6 +183,8 @@
                     <TextBlock.Text>문의/제휴</TextBlock.Text>
                 </TextBlock>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="⚙ 설정" Margin="0,0,4,0"
+                            Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>
                     <Button x:Name="CopyBtn" Content="복사" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnCopyClick"/>
                     <Button x:Name="SaveAsBtn" Content="다른이름저장" Margin="0,0,4,0"

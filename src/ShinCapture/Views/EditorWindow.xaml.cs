@@ -1631,6 +1631,15 @@ public partial class EditorWindow : Window
         rendered.Dispose();
     }
 
+    private void OnEditorSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (_settingsManager == null) return;
+        // 단축키 탭(4번째, 인덱스 3 — 일반/캡쳐/저장/단축키/지정사이즈/AI)을 기본 선택
+        var win = new SettingsWindow(_settingsManager, initialTabIndex: 3);
+        win.Owner = this;
+        win.ShowDialog();
+    }
+
     private Bitmap RenderFinalImage()
     {
         var width = _sourceImage.PixelWidth;

@@ -17,12 +17,17 @@ public partial class SettingsWindow : Window
     private ObservableCollection<FixedSizePreset> _fixedSizes = new();
     private readonly DpapiCredentialStore _aiStore = new();
 
-    public SettingsWindow(SettingsManager settingsManager)
+    public SettingsWindow(SettingsManager settingsManager, int initialTabIndex = 0)
     {
         InitializeComponent();
         _settingsManager = settingsManager;
         _settings = settingsManager.Load();
         LoadSettings();
+        if (initialTabIndex >= 0 && SettingsTabControl != null
+            && initialTabIndex < SettingsTabControl.Items.Count)
+        {
+            SettingsTabControl.SelectedIndex = initialTabIndex;
+        }
     }
 
     private void LoadSettings()
@@ -53,6 +58,7 @@ public partial class SettingsWindow : Window
 
         // 단축키
         TxtHkRegion.Text    = _settings.Hotkeys.RegionCapture;
+        TxtHkRegionAlt.Text = _settings.Hotkeys.RegionCaptureAlt;
         TxtHkFreeform.Text  = _settings.Hotkeys.FreeformCapture;
         TxtHkWindow.Text    = _settings.Hotkeys.WindowCapture;
         TxtHkElement.Text   = _settings.Hotkeys.ElementCapture;
@@ -146,6 +152,7 @@ public partial class SettingsWindow : Window
 
         // 단축키
         _settings.Hotkeys.RegionCapture    = TxtHkRegion.Text;
+        _settings.Hotkeys.RegionCaptureAlt = TxtHkRegionAlt.Text;
         _settings.Hotkeys.FreeformCapture  = TxtHkFreeform.Text;
         _settings.Hotkeys.WindowCapture    = TxtHkWindow.Text;
         _settings.Hotkeys.ElementCapture   = TxtHkElement.Text;

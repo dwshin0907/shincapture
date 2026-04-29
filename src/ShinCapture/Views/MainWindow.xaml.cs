@@ -75,8 +75,9 @@ public partial class MainWindow : Window
         // PrintScreen 등록
         int psResult = _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
 
-        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응
-        _hotkeyManager.Register("Ctrl+Shift+C", () => StartCapture(CaptureMode.Region));
+        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응 + 사용자 커스터마이징 가능
+        if (!string.IsNullOrWhiteSpace(_settings.Hotkeys.RegionCaptureAlt))
+            _hotkeyManager.Register(_settings.Hotkeys.RegionCaptureAlt, () => StartCapture(CaptureMode.Region));
 
         _hotkeyManager.Register(_settings.Hotkeys.FreeformCapture, () => StartCapture(CaptureMode.Freeform));
         _hotkeyManager.Register(_settings.Hotkeys.WindowCapture, () => StartCapture(CaptureMode.Window));

@@ -12,7 +12,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0" Background="Transparent" BorderThickness="0">
+        <TabControl x:Name="SettingsTabControl" Grid.Row="0" Background="Transparent" BorderThickness="0">
             <!-- 일반 탭 -->
             <TabItem Header="일반">
                 <StackPanel Margin="12,16,12,0" VerticalAlignment="Top">
@@ -120,49 +120,54 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="영역지정" VerticalAlignment="Center" Margin="0,0,0,10"/>
                     <TextBox x:Name="TxtHkRegion" Grid.Row="0" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="자유형" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkFreeform" Grid.Row="1" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="영역지정 (보조)" VerticalAlignment="Center" Margin="0,0,0,10"
+                               ToolTip="기본 PrintScreen 외 보조 단축키. 비워두면 등록 안 함 (다른 앱과 충돌 회피)."/>
+                    <TextBox x:Name="TxtHkRegionAlt" Grid.Row="1" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="창 캡쳐" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkWindow" Grid.Row="2" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="자유형" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkFreeform" Grid.Row="2" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="단위영역" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkElement" Grid.Row="3" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="창 캡쳐" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkWindow" Grid.Row="3" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" Text="전체화면" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkFullscreen" Grid.Row="4" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="단위영역" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkElement" Grid.Row="4" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="5" Grid.Column="0" Text="스크롤" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkScroll" Grid.Row="5" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="전체화면" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkFullscreen" Grid.Row="5" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="지정사이즈" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkFixedSize" Grid.Row="6" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="스크롤" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkScroll" Grid.Row="6" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="7" Grid.Column="0" Text="텍스트 캡쳐" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkTextCapture" Grid.Row="7" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="7" Grid.Column="0" Text="지정사이즈" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkFixedSize" Grid.Row="7" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <TextBlock Grid.Row="8" Grid.Column="0" Text="텍스트+번역" VerticalAlignment="Center" Margin="0,0,0,10"/>
-                    <TextBox x:Name="TxtHkTranslateCapture" Grid.Row="8" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
+                    <TextBlock Grid.Row="8" Grid.Column="0" Text="텍스트 캡쳐" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkTextCapture" Grid.Row="8" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <Separator Grid.Row="9" Grid.ColumnSpan="2" Margin="0,4,0,10"/>
+                    <TextBlock Grid.Row="9" Grid.Column="0" Text="텍스트+번역" VerticalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBox x:Name="TxtHkTranslateCapture" Grid.Row="9" Grid.Column="1" Padding="4,3" Margin="0,0,0,10"/>
 
-                    <CheckBox x:Name="ChkOverridePrintScreen" Grid.Row="10" Grid.ColumnSpan="2"
+                    <Separator Grid.Row="10" Grid.ColumnSpan="2" Margin="0,4,0,10"/>
+
+                    <CheckBox x:Name="ChkOverridePrintScreen" Grid.Row="11" Grid.ColumnSpan="2"
                               Content="PrintScreen 키를 신캡쳐가 독점 사용" Margin="0,0,0,10"
                               ToolTip="Windows 11의 'PrtSc 키로 화면 캡쳐 열기' 설정을 자동으로 꺼서, PrintScreen 키가 신캡쳐로 전달되도록 합니다. 해제하면 Windows 기본 동작(캡쳐 도구 열기)으로 되돌립니다."/>
 
-                    <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
+                    <StackPanel Grid.Row="12" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="OCR 언어" VerticalAlignment="Center" Width="120"/>
                         <ComboBox x:Name="CmbOcrLanguage" Width="200"/>
                         <Button x:Name="BtnOcrLanguageHelp" Content="언어팩 설치" Margin="8,0,0,0"
                                 Padding="8,2" Click="OnOcrLanguageHelp"/>
                     </StackPanel>
 
-                    <CheckBox x:Name="ChkOcrUpscale" Grid.Row="12" Grid.ColumnSpan="2"
+                    <CheckBox x:Name="ChkOcrUpscale" Grid.Row="13" Grid.ColumnSpan="2"
                               Content="OCR 인식률 향상 전처리"
                               ToolTip="OCR 실행 전에 작은 이미지 업스케일, 어두운 배경 자동 반전 등을 적용합니다. 원본 캡쳐 이미지에는 영향 없음. 보통 켜두는 것을 권장합니다."/>
                 </Grid>

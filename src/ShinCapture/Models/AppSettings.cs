@@ -50,6 +50,7 @@ public class SaveSettings
 public class HotkeySettings
 {
     public string RegionCapture { get; set; } = "PrintScreen";
+    public string RegionCaptureAlt { get; set; } = "Ctrl+Shift+C";
     public string FreeformCapture { get; set; } = "Ctrl+Shift+F";
     public string WindowCapture { get; set; } = "Ctrl+Shift+W";
     public string ElementCapture { get; set; } = "Ctrl+Shift+D";
