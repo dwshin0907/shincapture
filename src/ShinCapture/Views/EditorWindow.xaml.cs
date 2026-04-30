@@ -446,8 +446,8 @@ public partial class EditorWindow : Window
             Foreground = System.Windows.Media.Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            // 가장 긴 카피 기준으로 폭 확보 (20% 축소)
-            MinWidth = 160
+            // 메시지 길이가 달라도 폭이 흔들리지 않게 고정
+            Width = 220
         };
         stack.Children.Add(subText);
         stack.Children.Add(mainText);
@@ -656,7 +656,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(9, 3, 9, 3),
+            Padding = new Thickness(9, 2, 9, 2),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
@@ -686,7 +686,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(9, 3, 9, 3),
+            Padding = new Thickness(9, 2, 9, 2),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
