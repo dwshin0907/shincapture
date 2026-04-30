@@ -1388,7 +1388,7 @@ public partial class EditorWindow : Window
             var miCopy = new MenuItem { Header = "클립보드 복사" };
             miCopy.Click += (_, _) =>
             {
-                System.Windows.Clipboard.SetImage(localImg);
+                BitmapHelper.SetClipboardPng(localImg);
                 StatusText.Text = "클립보드에 복사됨";
             };
             ctx.Items.Add(miCopy);
@@ -1662,7 +1662,7 @@ public partial class EditorWindow : Window
         var path = _saveManager.SaveAuto(rendered, _settings);
         StatusText.Text = $"저장됨: {path}";
         if (_settings.Save.CopyToClipboard)
-            System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(rendered));
+            BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
         rendered.Dispose();
     }
 
@@ -1678,7 +1678,7 @@ public partial class EditorWindow : Window
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         var rendered = RenderFinalImage();
-        System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(rendered));
+        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
         StatusText.Text = "클립보드에 복사됨";
         rendered.Dispose();
     }

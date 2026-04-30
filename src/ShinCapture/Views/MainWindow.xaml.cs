@@ -166,8 +166,8 @@ public partial class MainWindow : Window
             RunOcrAndNotify(result.Image);
             return;
         }
-        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통)
-        System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
+        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통, PNG 형식만 — 자유형 알파 보존)
+        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(result.Image));
 
         switch (_settings.Capture.AfterCapture)
         {
