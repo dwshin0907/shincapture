@@ -22,7 +22,11 @@
                 Padding="{DynamicResource ToolbarPadding}">
             <DockPanel>
                 <Border x:Name="BannerArea" DockPanel.Dock="Right" Margin="8,0,0,0"/>
-                <WrapPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
+                <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled"
+                              Focusable="False">
+                    <StackPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
+                </ScrollViewer>
             </DockPanel>
         </Border>
 
