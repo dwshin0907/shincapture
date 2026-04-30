@@ -1743,6 +1743,44 @@ public partial class EditorWindow : Window
         OcrPanel.Visibility = Visibility.Collapsed;
     }
 
+    private double _editorHeightBeforeOcr = -1;
+
+    private void OnOcrPanelVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is not bool isVisible) return;
+        if (isVisible)
+        {
+            // 처음 보일 때만 원래 높이 저장
+            if (_editorHeightBeforeOcr < 0) _editorHeightBeforeOcr = this.Height;
+            // 레이아웃 완료 후 측정해야 ActualHeight가 정확
+            Dispatcher.BeginInvoke(new Action(GrowWindowForOcrPanel),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        else
+        {
+            // 닫힐 때 원래 높이로 복원 (사용자가 그 사이 리사이즈한 영향은 무시)
+            if (_editorHeightBeforeOcr > 0)
+            {
+                this.Height = _editorHeightBeforeOcr;
+                _editorHeightBeforeOcr = -1;
+            }
+        }
+    }
+
+    private void GrowWindowForOcrPanel()
+    {
+        var panelHeight = OcrPanel.ActualHeight;
+        if (panelHeight <= 0) return;
+        var workArea = System.Windows.SystemParameters.WorkArea;
+        var maxHeight = workArea.Height - 20;
+        var desired = this.Height + panelHeight;
+        if (desired > maxHeight) desired = maxHeight;
+        this.Height = desired;
+        // 화면 밖으로 안 나가게 위치 조정
+        if (this.Top + this.Height > workArea.Bottom)
+            this.Top = Math.Max(workArea.Top, workArea.Bottom - this.Height);
+    }
+
     private void OnOcrSelectAll(object sender, RoutedEventArgs e)
     {
         OcrTextBox.SelectAll();
