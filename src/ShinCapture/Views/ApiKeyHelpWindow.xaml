@@ -149,8 +149,8 @@
             </ScrollViewer>
 
             <!-- 우측: 사이드바 -->
-            <Border Grid.Column="2" Background="#ECFDF5"
-                    BorderBrush="#A7E3BF" BorderThickness="1"
+            <Border Grid.Column="2" Background="#F3F4F6"
+                    BorderBrush="#03C75A" BorderThickness="2"
                     CornerRadius="10" Padding="20">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
