@@ -1777,6 +1777,19 @@ public partial class EditorWindow : Window
             if (_pendingAutoTranslate && !string.IsNullOrWhiteSpace(text))
             {
                 _pendingAutoTranslate = false;
+
+                // 자동 대상 언어: 한국어면 영어로, 그 외(또는 미감지)면 한국어로
+                var detected = ShinCapture.Services.Ai.LanguageDetector.DetectSimple(text);
+                string autoTarget = (detected == "ko") ? "en" : "ko";
+                foreach (System.Windows.Controls.ComboBoxItem item in OcrTranslateLangBox.Items)
+                {
+                    if ((string)item.Tag == autoTarget)
+                    {
+                        OcrTranslateLangBox.SelectedItem = item;
+                        break;
+                    }
+                }
+
                 Dispatcher.BeginInvoke(new Action(() => OnOcrTranslateClick(this, new RoutedEventArgs())),
                     System.Windows.Threading.DispatcherPriority.Background);
             }
