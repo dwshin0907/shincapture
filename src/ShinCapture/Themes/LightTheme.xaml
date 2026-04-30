@@ -3,9 +3,9 @@
                     xmlns:system="clr-namespace:System;assembly=mscorlib">
 
     <!-- === Colors === -->
-    <Color x:Key="AccentColor">#0078D4</Color>
-    <Color x:Key="AccentHoverColor">#106EBE</Color>
-    <Color x:Key="AccentPressedColor">#005A9E</Color>
+    <Color x:Key="AccentColor">#4F46E5</Color>
+    <Color x:Key="AccentHoverColor">#4338CA</Color>
+    <Color x:Key="AccentPressedColor">#3730A3</Color>
 
     <Color x:Key="BackgroundPrimaryColor">#FFFFFF</Color>
     <Color x:Key="BackgroundSecondaryColor">#F5F5F5</Color>
