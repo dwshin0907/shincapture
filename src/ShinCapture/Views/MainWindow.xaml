@@ -31,7 +31,7 @@
         <DockPanel Grid.Row="3" Margin="0,8,0,0">
             <TextBlock x:Name="VersionLabel" Foreground="{DynamicResource TextDisabledBrush}"
                        FontSize="{DynamicResource FontSizeSmall}" VerticalAlignment="Center"/>
-            <Button Content="⚙ 설정" HorizontalAlignment="Right" Padding="12,4" Click="OnSettingsClick"/>
+            <Button Content="⚙&#xFE0E; 설정" HorizontalAlignment="Right" Padding="12,4" Click="OnSettingsClick"/>
         </DockPanel>
     </Grid>
 </Window>
