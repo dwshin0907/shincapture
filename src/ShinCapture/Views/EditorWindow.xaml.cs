@@ -132,12 +132,13 @@ public partial class EditorWindow : Window
         {
             OcrPanel.Visibility = Visibility.Collapsed;
             OcrTextBox.Text = "";
-            OcrPanelTitle.Text = "추출된 텍스트";
-        }
-        if (OcrTranslatedPanel != null)
-        {
-            OcrTranslatedPanel.Visibility = Visibility.Collapsed;
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = "";
+            OcrSourceLangLabel.Text = "";
             OcrTranslatedBox.Text = "";
+            OcrTargetLangLabel.Text = "";
+            if (OcrTranslatedPlaceholder != null)
+                OcrTranslatedPlaceholder.Visibility = Visibility.Visible;
         }
 
         if (autoOcr)
@@ -1674,20 +1675,23 @@ public partial class EditorWindow : Window
 
         SetStatus("OCR 실행 중...");
         OcrPanel.Visibility = Visibility.Visible;
-        OcrPanelTitle.Text = "추출된 텍스트 (추출 중…)";
+        OcrPanelTitle.Text = "🔤 텍스트 추출";
+        OcrPanelMeta.Text = "추출 중…";
         OcrTextBox.Text = "";
-        if (OcrTranslatedPanel != null)
-        {
-            OcrTranslatedPanel.Visibility = Visibility.Collapsed;
-            OcrTranslatedBox.Text = "";
-        }
+        OcrSourceLangLabel.Text = "";
+        // 우측 번역 패널 초기화 (placeholder 표시)
+        OcrTranslatedBox.Text = "";
+        OcrTargetLangLabel.Text = "";
+        if (OcrTranslatedPlaceholder != null)
+            OcrTranslatedPlaceholder.Visibility = Visibility.Visible;
 
         try
         {
             var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(currentSettings.Ocr.Language);
             if (langTag == null)
             {
-                OcrPanelTitle.Text = "OCR 언어팩이 필요합니다";
+                OcrPanelTitle.Text = "🔤 텍스트 추출";
+                OcrPanelMeta.Text = "OCR 언어팩 필요";
                 OcrTextBox.Text =
                     $"설정된 언어({currentSettings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
                     "Windows 설정 > 시간 및 언어 > 언어에서 언어팩을 설치한 뒤 다시 시도해주세요.";
@@ -1701,21 +1705,24 @@ public partial class EditorWindow : Window
 
             if (string.IsNullOrWhiteSpace(text))
             {
-                OcrPanelTitle.Text = "추출된 텍스트 없음";
+                OcrPanelMeta.Text = "(텍스트 없음)";
                 OcrTextBox.Text = "";
                 SetStatus("OCR: 텍스트를 찾지 못했습니다");
                 return;
             }
 
             OcrTextBox.Text = text;
-            var tagNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
-                ? "" : $" — {langTag} 폴백";
-            OcrPanelTitle.Text = $"추출된 텍스트 ({text.Length}자{tagNote})";
+            var fallbackNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
+                ? "" : $" (폴백)";
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = $"{text.Length}자";
+            OcrSourceLangLabel.Text = langTag + fallbackNote;
             SetStatus($"OCR 완료 ({text.Length}자)");
         }
         catch (Exception ex)
         {
-            OcrPanelTitle.Text = "OCR 실패";
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = "실패";
             OcrTextBox.Text = ex.Message;
             SetStatus("OCR 실패");
         }
@@ -1776,8 +1783,10 @@ public partial class EditorWindow : Window
         if (OcrTranslateLangBox.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
             targetLang = tag;
 
-        OcrTranslatedPanel.Visibility = Visibility.Visible;
+        if (OcrTranslatedPlaceholder != null)
+            OcrTranslatedPlaceholder.Visibility = Visibility.Collapsed;
         OcrTranslatedBox.Text = "번역 중…";
+        OcrTargetLangLabel.Text = targetLang;
         SetStatus("번역 실행 중…");
 
         var openAi = ShinCapture.Services.Ai.OpenAiClient.CreateDefault(settings.Ai.TimeoutSeconds);
@@ -1790,10 +1799,12 @@ public partial class EditorWindow : Window
             {
                 case ShinCapture.Services.Ai.TranslationOutcome.Success:
                     OcrTranslatedBox.Text = r.TranslatedText;
+                    OcrTargetLangLabel.Text = targetLang;
                     SetStatus($"번역 완료 ({r.TranslatedText.Length}자, {targetLang})");
                     break;
                 case ShinCapture.Services.Ai.TranslationOutcome.SkippedSameLanguage:
                     OcrTranslatedBox.Text = r.OriginalText;
+                    OcrTargetLangLabel.Text = $"{targetLang} (동일)";
                     SetStatus($"이미 {targetLang}입니다");
                     break;
                 default:
