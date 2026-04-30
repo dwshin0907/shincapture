@@ -250,10 +250,30 @@
                     <TextBlock.Text>문의/제휴</TextBlock.Text>
                 </TextBlock>
                 <Button Content="🔑 API 키 발급법" Margin="16,0,0,0"
-                        Style="{DynamicResource SubtleButton}" Padding="10,3"
-                        FontSize="11" Click="OnApiKeyHelpClick"
+                        Background="#FF8C00" Foreground="White" BorderThickness="0"
+                        Padding="14,5" FontSize="11" FontWeight="SemiBold"
+                        Cursor="Hand" Click="OnApiKeyHelpClick"
                         ToolTip="OpenAI API 키 발급 + 설정 가이드"
-                        DockPanel.Dock="Left"/>
+                        DockPanel.Dock="Left">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#EA580C"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#C2410C"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="⚙ 설정" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>

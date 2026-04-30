@@ -2,118 +2,214 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="신캡쳐 — OpenAI API 키 발급 가이드"
-        Width="640" Height="640"
+        Width="880" Height="640"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        MinWidth="780" MinHeight="540"
         Background="{DynamicResource BackgroundPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
         FontSize="{DynamicResource FontSizeNormal}">
-    <Grid Margin="24">
+    <Window.Resources>
+        <!-- 단계 번호 원 -->
+        <Style x:Key="StepBadge" TargetType="Border">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,2,14,0"/>
+        </Style>
+        <Style x:Key="StepBadgeText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- 가이드 카드 -->
+        <Style x:Key="GuideCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#FF8C00"/>
+                    <Setter Property="Background" Value="#FFF7ED"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="28">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- 헤더 -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="🔑 OpenAI API 키 발급 + 신캡쳐 설정 가이드"
-                       FontSize="18" FontWeight="SemiBold"/>
-            <TextBlock Text="번역 기능을 쓰려면 본인 OpenAI 키가 필요합니다 (BYOK 방식 — 키는 본인 PC에만 저장)"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Margin="0,6,0,0" TextWrapping="Wrap"/>
+        <!-- ============ 헤더 ============ -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="🔑" FontSize="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="OpenAI API 키 발급 가이드"
+                           FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="번역 기능을 쓰려면 본인 OpenAI 키가 필요합니다. 키는 본인 PC에만 암호화 저장됩니다 (BYOK 방식)."
+                       FontSize="12" Foreground="#5F6368"
+                       Margin="0,8,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
-        <!-- 본문 (스텝) -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <!-- Step 1 -->
-                <Border BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="16" Margin="0,0,0,12"
-                        Background="{DynamicResource BackgroundSecondaryBrush}">
-                    <StackPanel>
-                        <TextBlock Text="① OpenAI 계정 가입 / 로그인" FontWeight="SemiBold" FontSize="14"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,8" Foreground="{DynamicResource TextSecondaryBrush}">
-                            아래 사이트에서 계정을 만들거나 로그인하세요. 신용카드 등록이 필요할 수 있습니다.
-                        </TextBlock>
-                        <TextBlock>
-                            <Hyperlink NavigateUri="https://platform.openai.com/" RequestNavigate="OnHyperlinkRequestNavigate">
-                                https://platform.openai.com/ →
-                            </Hyperlink>
-                        </TextBlock>
+        <!-- ============ 본문 (좌: 3단계 / 우: 사이드바) ============ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="280"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 좌측: 3단계 가이드 -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <!-- Step 1 -->
+                    <Border Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1"
+                            CornerRadius="8" Padding="20,18" Margin="0,0,0,12">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Style="{StaticResource StepBadge}">
+                                <TextBlock Text="1" Style="{StaticResource StepBadgeText}"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="OpenAI 계정 가입 / 로그인"
+                                           FontWeight="SemiBold" FontSize="15"/>
+                                <TextBlock Margin="0,6,0,10" TextWrapping="Wrap" Foreground="#5F6368" FontSize="12">
+                                    아래 사이트에서 계정을 만들거나 로그인하세요. 결제 카드 등록이 필요할 수 있습니다.
+                                </TextBlock>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="https://platform.openai.com/"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="#0078D4" TextDecorations="None">
+                                        <Run Text="🔗 platform.openai.com"/>
+                                        <Run Text="  →" FontSize="11"/>
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Step 2 -->
+                    <Border Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1"
+                            CornerRadius="8" Padding="20,18" Margin="0,0,0,12">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Style="{StaticResource StepBadge}">
+                                <TextBlock Text="2" Style="{StaticResource StepBadgeText}"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="API 키 발급" FontWeight="SemiBold" FontSize="15"/>
+                                <TextBlock Margin="0,6,0,10" TextWrapping="Wrap" Foreground="#5F6368" FontSize="12">
+                                    로그인 후 아래 페이지로 이동 → "Create new secret key" 클릭 → 생성된 키를 즉시 복사하세요.
+                                    <LineBreak/>
+                                    <Run FontWeight="SemiBold" Foreground="#B45309">⚠ 키는 한 번만 표시되니 꼭 복사해두세요.</Run>
+                                </TextBlock>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="https://platform.openai.com/api-keys"
+                                               RequestNavigate="OnHyperlinkRequestNavigate"
+                                               Foreground="#0078D4" TextDecorations="None">
+                                        <Run Text="🔗 platform.openai.com/api-keys"/>
+                                        <Run Text="  →" FontSize="11"/>
+                                    </Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Step 3 -->
+                    <Border Background="#F8FAFC" BorderBrush="#E5E7EB" BorderThickness="1"
+                            CornerRadius="8" Padding="20,18" Margin="0,0,0,12">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Style="{StaticResource StepBadge}">
+                                <TextBlock Text="3" Style="{StaticResource StepBadgeText}"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="신캡쳐에 키 입력" FontWeight="SemiBold" FontSize="15"/>
+                                <TextBlock Margin="0,6,0,10" TextWrapping="Wrap" Foreground="#5F6368" FontSize="12">
+                                    설정 창의 <Run FontWeight="SemiBold" Foreground="#1A1A1A">AI 탭</Run>에 키를 붙여넣고 검증 → ✓ 표시되면 OK.
+                                    <LineBreak/>
+                                    "AI 기능 활성화" 체크박스도 켜주세요. 키는 Windows DPAPI로 이 PC에만 암호화 저장됩니다.
+                                </TextBlock>
+                                <Button Content="설정 창 열기" Click="OnOpenSettingsClick"
+                                        HorizontalAlignment="Left" Padding="16,7"
+                                        Style="{DynamicResource AccentButton}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- 우측: 사이드바 -->
+            <Border Grid.Column="2" Background="#FFFBF5"
+                    BorderBrush="#FFE4C7" BorderThickness="1"
+                    CornerRadius="10" Padding="20">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="📰" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="더 자세한 가이드"
+                                   FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
                     </StackPanel>
-                </Border>
+                    <TextBlock Text="외부 글에서 단계별 캡쳐와 함께 자세히 보세요."
+                               FontSize="11" Foreground="#92400E" TextWrapping="Wrap"
+                               Margin="0,0,0,16"/>
 
-                <!-- Step 2 -->
-                <Border BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="16" Margin="0,0,0,12"
-                        Background="{DynamicResource BackgroundSecondaryBrush}">
-                    <StackPanel>
-                        <TextBlock Text="② API 키 발급" FontWeight="SemiBold" FontSize="14"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,8" Foreground="{DynamicResource TextSecondaryBrush}">
-                            로그인 상태에서 아래 페이지로 이동 → "Create new secret key" 클릭 → 생성된 키를 복사하세요.
-                            <LineBreak/>
-                            ⚠ 키는 한 번만 표시되니 즉시 복사해두세요.
-                        </TextBlock>
-                        <TextBlock>
-                            <Hyperlink NavigateUri="https://platform.openai.com/api-keys" RequestNavigate="OnHyperlinkRequestNavigate">
-                                https://platform.openai.com/api-keys →
-                            </Hyperlink>
-                        </TextBlock>
-                    </StackPanel>
-                </Border>
+                    <!-- 카드 1 -->
+                    <Border x:Name="GuideCard1" Style="{StaticResource GuideCardStyle}"
+                            MouseLeftButtonUp="OnGuideCard1Click">
+                        <StackPanel>
+                            <TextBlock Text="📘 ChatGPT API키 발급받기"
+                                       FontWeight="SemiBold" FontSize="13"/>
+                            <TextBlock Text="키 발급 전체 과정을 스크린샷과 함께 단계별로 정리"
+                                       FontSize="11" Foreground="#5F6368"
+                                       TextWrapping="Wrap" Margin="0,4,0,8"/>
+                            <TextBlock>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#FF8C00"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
 
-                <!-- Step 3 -->
-                <Border BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="16" Margin="0,0,0,12"
-                        Background="{DynamicResource BackgroundSecondaryBrush}">
-                    <StackPanel>
-                        <TextBlock Text="③ 신캡쳐 설정에 키 입력" FontWeight="SemiBold" FontSize="14"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,8" Foreground="{DynamicResource TextSecondaryBrush}">
-                            신캡쳐 설정 창 → "AI" 탭 → "API 키" 칸에 붙여넣기 → "검증" 클릭 → ✓ 표시되면 OK.
-                            <LineBreak/>
-                            "AI 기능 활성화" 체크박스도 켜주세요. 키는 Windows DPAPI로 이 PC에만 암호화 저장됩니다.
-                        </TextBlock>
-                        <Button Content="설정 창 열기" Click="OnOpenSettingsClick"
-                                HorizontalAlignment="Left" Padding="14,5"
-                                Style="{DynamicResource AccentButton}"/>
-                    </StackPanel>
-                </Border>
+                    <!-- 카드 2 -->
+                    <Border x:Name="GuideCard2" Style="{StaticResource GuideCardStyle}"
+                            MouseLeftButtonUp="OnGuideCard2Click">
+                        <StackPanel>
+                            <TextBlock Text="💡 ChatGPT API키 무료세팅법"
+                                       FontWeight="SemiBold" FontSize="13"/>
+                            <TextBlock Text="결제 부담 줄이는 무료/저비용 사용 팁"
+                                       FontSize="11" Foreground="#5F6368"
+                                       TextWrapping="Wrap" Margin="0,4,0,8"/>
+                            <TextBlock>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#FF8C00"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
 
-                <!-- 외부 가이드 카드 -->
-                <TextBlock Text="📰 더 자세한 가이드 (외부 글)" FontWeight="SemiBold" FontSize="13"
-                           Margin="0,12,0,8"/>
+                    <!-- 보안 안내 박스 -->
+                    <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1"
+                            CornerRadius="6" Padding="12,10" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="🔒 보안" FontWeight="SemiBold" FontSize="11"
+                                       Foreground="#374151" Margin="0,0,0,4"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#5F6368">
+                                키는 Windows DPAPI로 이 PC + 사용자 계정에만 암호화 저장됩니다. 다른 PC로 파일을 옮겨도 못 풉니다.
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
 
-                <!-- 카드 1 -->
-                <Border x:Name="GuideCard1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="14,10" Margin="0,0,0,8"
-                        Cursor="Hand" Background="White"
-                        MouseLeftButtonUp="OnGuideCard1Click">
-                    <StackPanel>
-                        <TextBlock Text="ChatGPT API키 발급받기" FontWeight="SemiBold" FontSize="13"/>
-                        <TextBlock Text="contents.premium.naver.com/market/ai → 클릭하면 브라우저로 열립니다"
-                                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   Margin="0,3,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- 카드 2 -->
-                <Border x:Name="GuideCard2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="14,10" Margin="0,0,0,8"
-                        Cursor="Hand" Background="White"
-                        MouseLeftButtonUp="OnGuideCard2Click">
-                    <StackPanel>
-                        <TextBlock Text="ChatGPT API키 무료세팅법" FontWeight="SemiBold" FontSize="13"/>
-                        <TextBlock Text="contents.premium.naver.com/market/ai → 클릭하면 브라우저로 열립니다"
-                                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   Margin="0,3,0,0"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- 닫기 -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="닫기" Click="OnCloseClick" Padding="20,6"/>
+        <!-- ============ 닫기 ============ -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="닫기" Click="OnCloseClick" Padding="22,7"/>
         </StackPanel>
     </Grid>
 </Window>
