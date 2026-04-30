@@ -236,11 +236,12 @@
                             <TextBlock Text="모델:" VerticalAlignment="Center"/>
                             <ComboBox x:Name="AiModelBox" Grid.Column="1" IsEditable="True" Margin="4,0">
                                 <ComboBoxItem>gpt-4o-mini</ComboBoxItem>
-                                <ComboBoxItem>gpt-4o</ComboBoxItem>
-                                <ComboBoxItem>gpt-4.1</ComboBoxItem>
+                                <ComboBoxItem>gpt-4.1-nano</ComboBoxItem>
+                                <ComboBoxItem>gpt-5-mini</ComboBoxItem>
+                                <ComboBoxItem>gpt-5-nano</ComboBoxItem>
                             </ComboBox>
                         </Grid>
-                        <TextBlock Text="예상 비용: 1회 ≈ $0.0001 (1만 회 ≈ $1)" Margin="84,0,0,16" FontSize="11" Foreground="#888"/>
+                        <TextBlock Text="예상 비용: 1회 ≈ $0.0001 ~ $0.001 (모델별 차이)" Margin="84,0,0,16" FontSize="11" Foreground="#888"/>
 
                         <TextBlock Text="번역" FontWeight="Bold" Margin="0,8,0,8"/>
                         <Grid Margin="0,0,0,16">

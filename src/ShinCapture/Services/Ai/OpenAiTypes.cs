@@ -30,25 +30,32 @@ public sealed class OpenAiException : Exception
     }
 }
 
-public sealed class ChatMessage
-{
-    [JsonPropertyName("role")] public string Role { get; set; } = "user";
-    [JsonPropertyName("content")] public string Content { get; set; } = "";
-}
+// ── Responses API DTOs (/v1/responses) ──────────────────────────────────────
 
-public sealed class ChatRequest
+public sealed class ResponseRequest
 {
     [JsonPropertyName("model")] public string Model { get; set; } = "gpt-4o-mini";
-    [JsonPropertyName("messages")] public List<ChatMessage> Messages { get; set; } = new();
-    [JsonPropertyName("temperature")] public double Temperature { get; set; } = 0.0;
+    [JsonPropertyName("instructions")] public string? Instructions { get; set; }
+    [JsonPropertyName("input")] public string Input { get; set; } = "";
+    [JsonPropertyName("temperature")] public double? Temperature { get; set; } = 0.0;
 }
 
-public sealed class ChatResponse
+public sealed class ResponseEnvelope
 {
-    [JsonPropertyName("choices")] public List<ChatChoice>? Choices { get; set; }
+    [JsonPropertyName("id")] public string? Id { get; set; }
+    [JsonPropertyName("object")] public string? ObjectType { get; set; }
+    [JsonPropertyName("output")] public List<ResponseOutputItem>? Output { get; set; }
 }
 
-public sealed class ChatChoice
+public sealed class ResponseOutputItem
 {
-    [JsonPropertyName("message")] public ChatMessage? Message { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; set; }
+    [JsonPropertyName("role")] public string? Role { get; set; }
+    [JsonPropertyName("content")] public List<ResponseContentPart>? Content { get; set; }
+}
+
+public sealed class ResponseContentPart
+{
+    [JsonPropertyName("type")] public string? Type { get; set; }
+    [JsonPropertyName("text")] public string? Text { get; set; }
 }

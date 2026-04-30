@@ -11,6 +11,6 @@ public interface IOpenAiClient
     /// <summary>키가 유효한지(GET /v1/models) 비용 발생 없이 확인.</summary>
     Task<bool> ValidateKeyAsync(AiKeyHandle key, CancellationToken ct = default);
 
-    /// <summary>Chat Completions 호출.</summary>
-    Task<ChatResponse> PostChatAsync(ChatRequest request, AiKeyHandle key, CancellationToken ct = default);
+    /// <summary>Responses API 호출 (/v1/responses).</summary>
+    Task<ResponseEnvelope> PostResponseAsync(ResponseRequest request, AiKeyHandle key, CancellationToken ct = default);
 }

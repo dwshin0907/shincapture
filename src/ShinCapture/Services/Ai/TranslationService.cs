@@ -1,12 +1,12 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ShinCapture.Services.Ai;
 
 /// <summary>
-/// OCR 텍스트를 OpenAI Chat API로 번역. 키 없음/빈 텍스트/같은 언어 케이스는 호출 전후로 스킵 분기.
+/// OCR 텍스트를 OpenAI Responses API로 번역. 키 없음/빈 텍스트/같은 언어 케이스는 호출 전후로 스킵 분기.
 /// </summary>
 public sealed class TranslationService
 {
@@ -51,21 +51,30 @@ public sealed class TranslationService
             "If the source is already in the target language, return the source text exactly as-is. " +
             "Output ONLY the translation, no commentary, no quotes.";
 
-        var req = new ChatRequest
+        var req = new ResponseRequest
         {
             Model = model,
-            Temperature = 0.0,
-            Messages = new List<ChatMessage>
-            {
-                new() { Role = "system", Content = systemPrompt },
-                new() { Role = "user", Content = text }
-            }
+            Instructions = systemPrompt,
+            Input = text,
+            Temperature = 0.0
         };
 
-        var resp = await _openAi.PostChatAsync(req, key, ct).ConfigureAwait(false);
-        if (resp.Choices == null || resp.Choices.Count == 0)
-            throw new OpenAiException(OpenAiErrorKind.ParseFailed, "응답에 choices가 없습니다");
-        var translated = resp.Choices[0]?.Message?.Content?.Trim() ?? "";
+        var resp = await _openAi.PostResponseAsync(req, key, ct).ConfigureAwait(false);
+
+        if (resp.Output == null || resp.Output.Count == 0)
+            throw new OpenAiException(OpenAiErrorKind.ParseFailed, "응답에 output이 없습니다");
+
+        var firstMsg = resp.Output.FirstOrDefault(o => o.Type == "message");
+        if (firstMsg == null || firstMsg.Content == null || firstMsg.Content.Count == 0)
+            throw new OpenAiException(OpenAiErrorKind.ParseFailed, "응답에 message content가 없습니다");
+
+        var translated = string.Concat(firstMsg.Content
+            .Where(c => c.Type == "output_text" && !string.IsNullOrEmpty(c.Text))
+            .Select(c => c.Text))
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(translated))
+            throw new OpenAiException(OpenAiErrorKind.ParseFailed, "응답 텍스트가 비어있습니다");
 
         if (string.Equals(translated, text.Trim(), StringComparison.Ordinal))
         {

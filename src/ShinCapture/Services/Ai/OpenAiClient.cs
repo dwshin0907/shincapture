@@ -56,10 +56,10 @@ public sealed class OpenAiClient : IOpenAiClient
         catch (HttpRequestException) { return false; }
     }
 
-    public async Task<ChatResponse> PostChatAsync(ChatRequest request, AiKeyHandle key, CancellationToken ct = default)
+    public async Task<ResponseEnvelope> PostResponseAsync(ResponseRequest request, AiKeyHandle key, CancellationToken ct = default)
     {
         EnsureWhitelist();
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/responses")
         {
             Content = JsonContent.Create(request)
         };
@@ -99,7 +99,7 @@ public sealed class OpenAiClient : IOpenAiClient
 
             try
             {
-                var parsed = await resp.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken: ct).ConfigureAwait(false);
+                var parsed = await resp.Content.ReadFromJsonAsync<ResponseEnvelope>(cancellationToken: ct).ConfigureAwait(false);
                 return parsed ?? throw new OpenAiException(OpenAiErrorKind.ParseFailed, "빈 응답");
             }
             catch (JsonException ex)

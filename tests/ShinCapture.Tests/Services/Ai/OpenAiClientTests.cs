@@ -31,25 +31,36 @@ public class OpenAiClientTests
     }
 
     [Fact]
-    public async Task PostChat_AttachesAuthorizationHeader()
+    public async Task PostResponse_AttachesAuthorizationHeader()
     {
         var (client, handler) = CreateClient();
         handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"hi\"}}]}")
+            Content = new StringContent(@"{
+                ""id"": ""resp_x"",
+                ""object"": ""response"",
+                ""output"": [
+                    {
+                        ""type"": ""message"",
+                        ""role"": ""assistant"",
+                        ""content"": [{""type"":""output_text"",""text"":""hi""}]
+                    }
+                ]
+            }")
         };
 
         using var key = new AiKeyHandle("sk-abc-XYZ");
-        var resp = await client.PostChatAsync(new ChatRequest { Model = "gpt-4o-mini" }, key);
+        var resp = await client.PostResponseAsync(new ResponseRequest { Model = "gpt-4o-mini" }, key);
 
-        Assert.Equal("hi", resp.Choices![0].Message!.Content);
+        Assert.NotNull(resp.Output);
+        Assert.Equal("hi", resp.Output![0].Content![0].Text);
         var auth = handler.LastRequest!.Headers.Authorization!;
         Assert.Equal("Bearer", auth.Scheme);
         Assert.Equal("sk-abc-XYZ", auth.Parameter);
     }
 
     [Fact]
-    public async Task PostChat_RejectsNonOpenAiHost()
+    public async Task PostResponse_RejectsNonOpenAiHost()
     {
         var handler = new FakeHandler();
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://evil.example.com") };
@@ -57,12 +68,12 @@ public class OpenAiClientTests
 
         using var key = new AiKeyHandle("sk-abc");
         var ex = await Assert.ThrowsAsync<OpenAiException>(
-            () => client.PostChatAsync(new ChatRequest(), key));
+            () => client.PostResponseAsync(new ResponseRequest(), key));
         Assert.Equal(OpenAiErrorKind.Unknown, ex.Kind);
     }
 
     [Fact]
-    public async Task PostChat_401_ThrowsInvalidKey()
+    public async Task PostResponse_401_ThrowsInvalidKey()
     {
         var (client, handler) = CreateClient();
         handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
@@ -72,12 +83,12 @@ public class OpenAiClientTests
 
         using var key = new AiKeyHandle("sk-bad");
         var ex = await Assert.ThrowsAsync<OpenAiException>(
-            () => client.PostChatAsync(new ChatRequest(), key));
+            () => client.PostResponseAsync(new ResponseRequest(), key));
         Assert.Equal(OpenAiErrorKind.InvalidKey, ex.Kind);
     }
 
     [Fact]
-    public async Task PostChat_429_ThrowsRateLimitedWithRetryAfter()
+    public async Task PostResponse_429_ThrowsRateLimitedWithRetryAfter()
     {
         var (client, handler) = CreateClient();
         handler.Responder = _ =>
@@ -92,13 +103,13 @@ public class OpenAiClientTests
 
         using var key = new AiKeyHandle("sk-abc");
         var ex = await Assert.ThrowsAsync<OpenAiException>(
-            () => client.PostChatAsync(new ChatRequest(), key));
+            () => client.PostResponseAsync(new ResponseRequest(), key));
         Assert.Equal(OpenAiErrorKind.RateLimited, ex.Kind);
         Assert.Equal(30, ex.RetryAfter!.Value.TotalSeconds);
     }
 
     [Fact]
-    public async Task PostChat_404_ThrowsModelNotFound()
+    public async Task PostResponse_404_ThrowsModelNotFound()
     {
         var (client, handler) = CreateClient();
         handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.NotFound)
@@ -108,12 +119,12 @@ public class OpenAiClientTests
 
         using var key = new AiKeyHandle("sk-abc");
         var ex = await Assert.ThrowsAsync<OpenAiException>(
-            () => client.PostChatAsync(new ChatRequest { Model = "nonexistent" }, key));
+            () => client.PostResponseAsync(new ResponseRequest { Model = "nonexistent" }, key));
         Assert.Equal(OpenAiErrorKind.ModelNotFound, ex.Kind);
     }
 
     [Fact]
-    public async Task PostChat_500_ThrowsServerError()
+    public async Task PostResponse_500_ThrowsServerError()
     {
         var (client, handler) = CreateClient();
         handler.Responder = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
@@ -123,7 +134,7 @@ public class OpenAiClientTests
 
         using var key = new AiKeyHandle("sk-abc");
         var ex = await Assert.ThrowsAsync<OpenAiException>(
-            () => client.PostChatAsync(new ChatRequest(), key));
+            () => client.PostResponseAsync(new ResponseRequest(), key));
         Assert.Equal(OpenAiErrorKind.ServerError, ex.Kind);
     }
 

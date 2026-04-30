@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ShinCapture.Services.Ai;
@@ -18,11 +19,22 @@ public class TranslationServiceTests
 
     private sealed class FakeOpenAi : IOpenAiClient
     {
-        public Func<ChatRequest, ChatResponse> Responder { get; set; } = req =>
-            new ChatResponse { Choices = new() { new ChatChoice { Message = new ChatMessage { Content = "[translated]" } } } };
-        public ChatRequest? LastRequest { get; private set; }
+        public Func<ResponseRequest, ResponseEnvelope> Responder { get; set; } = req =>
+            new ResponseEnvelope
+            {
+                Output = new List<ResponseOutputItem>
+                {
+                    new() { Type = "message", Role = "assistant",
+                        Content = new List<ResponseContentPart>
+                        {
+                            new() { Type = "output_text", Text = "[translated]" }
+                        }
+                    }
+                }
+            };
+        public ResponseRequest? LastRequest { get; private set; }
         public Task<bool> ValidateKeyAsync(AiKeyHandle key, CancellationToken ct = default) => Task.FromResult(true);
-        public Task<ChatResponse> PostChatAsync(ChatRequest request, AiKeyHandle key, CancellationToken ct = default)
+        public Task<ResponseEnvelope> PostResponseAsync(ResponseRequest request, AiKeyHandle key, CancellationToken ct = default)
         {
             LastRequest = request;
             return Task.FromResult(Responder(request));
@@ -52,9 +64,17 @@ public class TranslationServiceTests
         var store = new FakeStore { Plaintext = "sk-x" };
         var ai = new FakeOpenAi
         {
-            Responder = req => new ChatResponse
+            Responder = req => new ResponseEnvelope
             {
-                Choices = new() { new ChatChoice { Message = new ChatMessage { Content = "안녕" } } }
+                Output = new List<ResponseOutputItem>
+                {
+                    new() { Type = "message", Role = "assistant",
+                        Content = new List<ResponseContentPart>
+                        {
+                            new() { Type = "output_text", Text = "안녕" }
+                        }
+                    }
+                }
             }
         };
         var s = new TranslationService(store, ai);
@@ -71,9 +91,15 @@ public class TranslationServiceTests
         var ai = new FakeOpenAi
         {
             // 모델이 원문 그대로 돌려보내는 시나리오
-            Responder = req => new ChatResponse
+            Responder = req => new ResponseEnvelope
             {
-                Choices = new() { new ChatChoice { Message = new ChatMessage { Content = req.Messages[^1].Content } } }
+                Output = new List<ResponseOutputItem>
+                {
+                    new() { Type = "message", Content = new List<ResponseContentPart>
+                    {
+                        new() { Type = "output_text", Text = req.Input }
+                    }}
+                }
             }
         };
         var s = new TranslationService(store, ai);
@@ -89,16 +115,16 @@ public class TranslationServiceTests
         var s = new TranslationService(store, ai);
         await s.TranslateAsync("hello", "ja", "gpt-4o");
         Assert.Equal("gpt-4o", ai.LastRequest!.Model);
-        Assert.Contains("ja", ai.LastRequest.Messages[0].Content); // 시스템 프롬프트에 대상 언어 포함
+        Assert.Contains("ja", ai.LastRequest.Instructions); // 시스템 프롬프트(Instructions)에 대상 언어 포함
     }
 
     [Fact]
-    public async Task Translate_EmptyChoices_ThrowsParseFailed()
+    public async Task Translate_EmptyOutput_ThrowsParseFailed()
     {
         var store = new FakeStore { Plaintext = "sk-x" };
         var ai = new FakeOpenAi
         {
-            Responder = req => new ChatResponse { Choices = new System.Collections.Generic.List<ChatChoice>() }
+            Responder = req => new ResponseEnvelope { Output = new List<ResponseOutputItem>() }
         };
         var s = new TranslationService(store, ai);
         var ex = await Assert.ThrowsAsync<OpenAiException>(
