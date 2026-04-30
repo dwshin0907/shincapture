@@ -14,7 +14,7 @@
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Background" Value="#4F46E5"/>
             <Setter Property="VerticalAlignment" Value="Top"/>
             <Setter Property="Margin" Value="0,2,14,0"/>
         </Style>
@@ -36,8 +36,8 @@
             <Setter Property="Margin" Value="0,0,0,10"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="#FF8C00"/>
-                    <Setter Property="Background" Value="#FFF7ED"/>
+                    <Setter Property="BorderBrush" Value="#4F46E5"/>
+                    <Setter Property="Background" Value="#EEF2FF"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -89,7 +89,7 @@
                                 <TextBlock>
                                     <Hyperlink NavigateUri="https://platform.openai.com/"
                                                RequestNavigate="OnHyperlinkRequestNavigate"
-                                               Foreground="#0078D4" TextDecorations="None">
+                                               Foreground="#4F46E5" TextDecorations="None">
                                         <Run Text="🔗 platform.openai.com"/>
                                         <Run Text="  →" FontSize="11"/>
                                     </Hyperlink>
@@ -115,7 +115,7 @@
                                 <TextBlock>
                                     <Hyperlink NavigateUri="https://platform.openai.com/api-keys"
                                                RequestNavigate="OnHyperlinkRequestNavigate"
-                                               Foreground="#0078D4" TextDecorations="None">
+                                               Foreground="#4F46E5" TextDecorations="None">
                                         <Run Text="🔗 platform.openai.com/api-keys"/>
                                         <Run Text="  →" FontSize="11"/>
                                     </Hyperlink>
@@ -149,8 +149,8 @@
             </ScrollViewer>
 
             <!-- 우측: 사이드바 -->
-            <Border Grid.Column="2" Background="#FFFBF5"
-                    BorderBrush="#FFE4C7" BorderThickness="1"
+            <Border Grid.Column="2" Background="#EEF2FF"
+                    BorderBrush="#C7D2FE" BorderThickness="1"
                     CornerRadius="10" Padding="20">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -159,7 +159,7 @@
                                    FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="외부 글에서 단계별 캡쳐와 함께 자세히 보세요."
-                               FontSize="11" Foreground="#92400E" TextWrapping="Wrap"
+                               FontSize="11" Foreground="#3730A3" TextWrapping="Wrap"
                                Margin="0,0,0,16"/>
 
                     <!-- 카드 1 -->
@@ -172,7 +172,7 @@
                                        FontSize="11" Foreground="#5F6368"
                                        TextWrapping="Wrap" Margin="0,4,0,8"/>
                             <TextBlock>
-                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#FF8C00"/>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#4F46E5"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
@@ -187,7 +187,7 @@
                                        FontSize="11" Foreground="#5F6368"
                                        TextWrapping="Wrap" Margin="0,4,0,8"/>
                             <TextBlock>
-                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#FF8C00"/>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#4F46E5"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
