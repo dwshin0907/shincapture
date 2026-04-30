@@ -256,7 +256,7 @@
                         ToolTip="OpenAI API 키 발급 + 설정 가이드"
                         DockPanel.Dock="Left"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="⚙ 설정" Margin="0,0,4,0"
+                    <Button Content="⚙&#xFE0E; 설정" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>
                     <Button x:Name="CopyBtn" Content="복사" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnCopyClick"/>
