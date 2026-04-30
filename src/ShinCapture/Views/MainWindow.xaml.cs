@@ -281,6 +281,11 @@ public partial class MainWindow : Window
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("⚙ 환경설정", null, (_, _) => OpenSettings());
         menu.Items.Add("ℹ 신캡쳐 정보", null, (_, _) => ShowAbout());
+        menu.Items.Add("🔑 API 키 발급 안내", null, (_, _) =>
+        {
+            var win = new Views.ApiKeyHelpWindow(_settingsManager);
+            win.ShowDialog();
+        });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("✕ 종료", null, (_, _) => ExitApplication());
         return menu;

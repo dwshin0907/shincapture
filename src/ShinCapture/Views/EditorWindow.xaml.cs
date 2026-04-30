@@ -1693,6 +1693,29 @@ public partial class EditorWindow : Window
         win.ShowDialog();
     }
 
+    private void OnApiKeyHelpClick(object sender, RoutedEventArgs e)
+    {
+        var win = new ApiKeyHelpWindow(_settingsManager);
+        win.Owner = this;
+        win.ShowDialog();
+    }
+
+    private void RefreshOcrBanner()
+    {
+        if (OcrApiKeyBanner == null) return;
+        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
+        OcrApiKeyBanner.Visibility = store.HasKey() ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnApiKeyBannerClick(object sender, MouseButtonEventArgs e)
+    {
+        var win = new ApiKeyHelpWindow(_settingsManager);
+        win.Owner = this;
+        win.ShowDialog();
+        // 다이얼로그 닫힌 후 키가 등록됐을 수 있음 → 배너 갱신
+        RefreshOcrBanner();
+    }
+
     private Bitmap RenderFinalImage()
     {
         var width = _sourceImage.PixelWidth;
@@ -1725,6 +1748,7 @@ public partial class EditorWindow : Window
         // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 → 디스크에서 최신 설정 로드
         var currentSettings = _settingsManager?.Load() ?? _settings;
 
+        RefreshOcrBanner();
         SetStatus("OCR 실행 중...");
         OcrPanel.Visibility = Visibility.Visible;
         OcrPanelTitle.Text = "🔤 텍스트 추출";
@@ -1826,6 +1850,7 @@ public partial class EditorWindow : Window
         if (e.NewValue is not bool isVisible) return;
         if (isVisible)
         {
+            RefreshOcrBanner();
             // 처음 보일 때만 원래 높이 저장
             if (_editorHeightBeforeOcr < 0) _editorHeightBeforeOcr = this.Height;
             // 레이아웃 완료 후 측정해야 ActualHeight가 정확

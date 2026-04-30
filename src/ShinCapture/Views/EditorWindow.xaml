@@ -196,6 +196,21 @@
                                            VerticalAlignment="Center"/>
                             </DockPanel>
                         </Border>
+                        <!-- API 키 미설정 시에만 표시되는 배너 -->
+                        <Border x:Name="OcrApiKeyBanner" DockPanel.Dock="Bottom" Visibility="Collapsed"
+                                Background="#FEF3C7"
+                                BorderBrush="#FCD34D" BorderThickness="0,1,0,0"
+                                Padding="12,8" Cursor="Hand"
+                                MouseLeftButtonUp="OnApiKeyBannerClick"
+                                ToolTip="클릭하면 API 키 발급 가이드가 열립니다">
+                            <DockPanel>
+                                <TextBlock Text="→" DockPanel.Dock="Right" FontSize="12"
+                                           Foreground="#92400E" VerticalAlignment="Center"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#92400E" FontSize="11">
+                                    🔑 번역 기능을 쓰려면 OpenAI API 키 등록이 필요합니다 — <Bold>발급법 보기</Bold>
+                                </TextBlock>
+                            </DockPanel>
+                        </Border>
                         <Grid>
                             <TextBox x:Name="OcrTranslatedBox"
                                      IsReadOnly="True" AcceptsReturn="True"
@@ -234,6 +249,11 @@
                            ToolTip="popolong@naver.com">
                     <TextBlock.Text>문의/제휴</TextBlock.Text>
                 </TextBlock>
+                <Button Content="🔑 API 키 발급법" Margin="16,0,0,0"
+                        Style="{DynamicResource SubtleButton}" Padding="10,3"
+                        FontSize="11" Click="OnApiKeyHelpClick"
+                        ToolTip="OpenAI API 키 발급 + 설정 가이드"
+                        DockPanel.Dock="Left"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="⚙ 설정" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>
