@@ -447,7 +447,7 @@ public partial class EditorWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
             // 메시지 길이가 달라도 폭이 흔들리지 않게 고정
-            Width = 220
+            Width = 200
         };
         stack.Children.Add(subText);
         stack.Children.Add(mainText);
