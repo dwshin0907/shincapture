@@ -98,7 +98,6 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>   <!-- 헤더 -->
                     <RowDefinition Height="*" MinHeight="140"/>  <!-- 좌우 분할 본문 -->
-                    <RowDefinition Height="Auto"/>   <!-- footer -->
                 </Grid.RowDefinitions>
 
                 <!-- Header -->
@@ -148,13 +147,19 @@
 
                     <!-- 좌측: 원문 -->
                     <DockPanel Grid.Column="0">
-                        <Border DockPanel.Dock="Top" Padding="12,7"
+                        <Border DockPanel.Dock="Top" Padding="12,5,8,5"
                                 Background="#F8FAFC"
                                 BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
                             <DockPanel>
+                                <Button x:Name="OcrCopyBtn" Content="📋 복사" DockPanel.Dock="Right"
+                                        Padding="8,2" FontSize="11" Margin="6,0,0,0"
+                                        Background="Transparent" BorderBrush="{DynamicResource BorderLightBrush}"
+                                        Foreground="{DynamicResource TextSecondaryBrush}"
+                                        Cursor="Hand" Click="OnOcrCopy"
+                                        ToolTip="원문 텍스트를 클립보드에 복사"/>
                                 <TextBlock x:Name="OcrSourceLangLabel" Text="" DockPanel.Dock="Right"
                                            FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 <TextBlock Text="원문" FontWeight="SemiBold" FontSize="12"
                                            VerticalAlignment="Center"/>
                             </DockPanel>
@@ -173,13 +178,19 @@
 
                     <!-- 우측: 번역 -->
                     <DockPanel Grid.Column="2">
-                        <Border DockPanel.Dock="Top" Padding="12,7"
+                        <Border DockPanel.Dock="Top" Padding="12,5,8,5"
                                 Background="#F8FAFC"
                                 BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
                             <DockPanel>
+                                <Button x:Name="OcrTranslatedCopyBtn" Content="📋 복사" DockPanel.Dock="Right"
+                                        Padding="8,2" FontSize="11" Margin="6,0,0,0"
+                                        Background="Transparent" BorderBrush="{DynamicResource BorderLightBrush}"
+                                        Foreground="{DynamicResource TextSecondaryBrush}"
+                                        Cursor="Hand" Click="OnOcrTranslatedCopyClick"
+                                        ToolTip="번역문을 클립보드에 복사"/>
                                 <TextBlock x:Name="OcrTargetLangLabel" Text="" DockPanel.Dock="Right"
                                            FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 <TextBlock x:Name="OcrTranslatedTitle" Text="번역"
                                            FontWeight="SemiBold" FontSize="12"
                                            VerticalAlignment="Center"/>
@@ -202,20 +213,6 @@
                     </DockPanel>
                 </Grid>
 
-                <!-- Footer -->
-                <Border Grid.Row="2" Padding="12,8"
-                        Background="{DynamicResource BackgroundPrimaryBrush}"
-                        BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,1,0,0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button x:Name="OcrCopyBtn" Content="원문 복사"
-                                Padding="12,5" Margin="0,0,6,0"
-                                Click="OnOcrCopy"/>
-                        <Button x:Name="OcrTranslatedCopyBtn" Content="번역 복사"
-                                Padding="14,5"
-                                Style="{DynamicResource AccentButton}"
-                                Click="OnOcrTranslatedCopyClick"/>
-                    </StackPanel>
-                </Border>
             </Grid>
         </Border>
 
