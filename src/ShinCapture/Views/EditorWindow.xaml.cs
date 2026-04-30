@@ -641,14 +641,14 @@ public partial class EditorWindow : Window
         sp.Children.Add(new TextBlock
         {
             Text = "\U0001F524",  // 🔤
-            FontSize = 16,
+            FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 4, 0)
+            Margin = new Thickness(0, 0, 3, 0)
         });
         sp.Children.Add(new TextBlock
         {
             Text = "텍스트 추출",
-            FontSize = 13,
+            FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -656,7 +656,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(12, 5, 12, 5),
+            Padding = new Thickness(9, 3, 9, 3),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
@@ -671,14 +671,14 @@ public partial class EditorWindow : Window
         sp.Children.Add(new TextBlock
         {
             Text = "\U0001F310",  // 🌐
-            FontSize = 16,
+            FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 4, 0)
+            Margin = new Thickness(0, 0, 3, 0)
         });
         sp.Children.Add(new TextBlock
         {
             Text = "번역",
-            FontSize = 13,
+            FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -686,7 +686,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(12, 5, 12, 5),
+            Padding = new Thickness(9, 3, 9, 3),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
