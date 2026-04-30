@@ -656,7 +656,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(9, 2, 9, 2),
+            Padding = new Thickness(9, 1, 9, 1),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
@@ -686,7 +686,7 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(9, 2, 9, 2),
+            Padding = new Thickness(9, 1, 9, 1),
             Margin = new Thickness(2, 1, 2, 1),
             Style = (Style)FindResource("AccentButton"),
             ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
