@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly SaveManager _saveManager;
     private AppSettings _settings;
     private CaptureMode _lastCaptureMode = CaptureMode.Region;
+    private bool _editorAutoTranslate;
 
     public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
@@ -148,6 +149,15 @@ public partial class MainWindow : Window
 
     private EditorWindow? _editorWindow;
 
+    private void SubscribeCaptureRequested(EditorWindow editor)
+    {
+        editor.CaptureRequested += (mode, autoTranslate) =>
+        {
+            _editorAutoTranslate = autoTranslate;
+            StartCapture(mode);
+        };
+    }
+
     private void HandleCaptureResult(CaptureResult result)
     {
         // 텍스트 캡쳐 모드: OCR → 클립보드(텍스트) → 토스트. 이미지 클립보드/편집기 분기 X.
@@ -163,9 +173,11 @@ public partial class MainWindow : Window
         {
             case AfterCaptureAction.OpenEditor:
                 bool autoOcr = (_lastCaptureMode == CaptureMode.Translate);
+                bool autoTranslate = autoOcr && _editorAutoTranslate;
+                _editorAutoTranslate = false;
                 if (_editorWindow != null)
                 {
-                    _editorWindow.LoadNewCapture(result.Image, autoOcr);
+                    _editorWindow.LoadNewCapture(result.Image, autoOcr, autoTranslate);
                     _editorWindow.Show();
                     _editorWindow.WindowState = WindowState.Normal;
                     _editorWindow.Topmost = true;
@@ -175,10 +187,15 @@ public partial class MainWindow : Window
                 else
                 {
                     _editorWindow = new EditorWindow(result.Image, _saveManager, _settings, _settingsManager);
+                    SubscribeCaptureRequested(_editorWindow);
                     if (autoOcr)
+                    {
+                        bool localAutoTranslate = autoTranslate;
                         _editorWindow.Loaded += (_, _) =>
-                            _editorWindow.Dispatcher.BeginInvoke(new Action(() => _editorWindow.TriggerAutoOcr()),
+                            _editorWindow.Dispatcher.BeginInvoke(
+                                new Action(() => _editorWindow.TriggerAutoOcr(localAutoTranslate)),
                                 System.Windows.Threading.DispatcherPriority.Background);
+                    }
                     _editorWindow.Show();
                     _editorWindow.Activate();
                 }
@@ -297,6 +314,7 @@ public partial class MainWindow : Window
             using (var g = System.Drawing.Graphics.FromImage(blank))
                 g.Clear(System.Drawing.Color.White);
             _editorWindow = new EditorWindow(blank, _saveManager, _settings, _settingsManager);
+            SubscribeCaptureRequested(_editorWindow);
             _editorWindow.Show();
             _editorWindow.Activate();
         }

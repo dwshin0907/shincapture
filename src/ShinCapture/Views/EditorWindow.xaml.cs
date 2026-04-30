@@ -33,6 +33,11 @@ public partial class EditorWindow : Window
     private static readonly List<BitmapSource> _captureHistory = new();
     private const int MaxHistory = 50;
 
+    /// <summary>편집기에서 새 캡쳐를 요청. (mode, autoTranslate)</summary>
+    public event Action<Models.CaptureMode, bool>? CaptureRequested;
+
+    private bool _pendingAutoTranslate;
+
     // 캡쳐별 편집 상태 보존
     private readonly Dictionary<BitmapSource, List<EditorObject>> _captureObjects = new();
 
@@ -106,7 +111,8 @@ public partial class EditorWindow : Window
 
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
     /// <param name="autoOcr">true이면 로드 직후 OCR을 자동 실행 (Translate 모드 전용)</param>
-    public void LoadNewCapture(Bitmap capturedImage, bool autoOcr = false)
+    /// <param name="autoTranslate">true이면 OCR 직후 자동 번역 실행 (번역 버튼 흐름 전용)</param>
+    public void LoadNewCapture(Bitmap capturedImage, bool autoOcr = false, bool autoTranslate = false)
     {
         // 현재 편집 상태 저장
         SaveCurrentObjects();
@@ -143,14 +149,19 @@ public partial class EditorWindow : Window
 
         if (autoOcr)
         {
+            _pendingAutoTranslate = autoTranslate;
             Dispatcher.BeginInvoke(new Action(RunEditorOcr),
                 System.Windows.Threading.DispatcherPriority.Background);
         }
     }
 
     /// <summary>외부(MainWindow)에서 OCR 자동 실행을 트리거할 때 사용 (새 EditorWindow 생성 시)</summary>
-    public void TriggerAutoOcr()
+    public void TriggerAutoOcr() => TriggerAutoOcr(false);
+
+    /// <summary>autoTranslate 플래그를 함께 지정하여 OCR 자동 실행</summary>
+    public void TriggerAutoOcr(bool autoTranslate)
     {
+        _pendingAutoTranslate = autoTranslate;
         RunEditorOcr();
     }
 
@@ -357,6 +368,9 @@ public partial class EditorWindow : Window
         var ocrBtn = CreateOcrActionButton();
         ToolbarPanel.Children.Add(ocrBtn);
         _toolButtons["OCR"] = ocrBtn;
+
+        // 번역 버튼 — OCR 버튼 바로 오른쪽
+        ToolbarPanel.Children.Add(CreateTranslateActionButton());
 
         ToolbarPanel.Children.Add(CreateSeparator());
 
@@ -649,6 +663,44 @@ public partial class EditorWindow : Window
         };
         btn.Click += (_, _) => RunEditorOcr();
         return btn;
+    }
+
+    private Button CreateTranslateActionButton()
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock
+        {
+            Text = "\U0001F310",  // 🌐
+            FontSize = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0)
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = "번역",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btn = new Button
+        {
+            Content = sp,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(2, 1, 2, 1),
+            Background = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Foreground = System.Windows.Media.Brushes.White,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "영역 캡쳐 → OCR → 자동 번역"
+        };
+        btn.Click += (_, _) => RequestTranslateCapture();
+        return btn;
+    }
+
+    private void RequestTranslateCapture()
+    {
+        CaptureRequested?.Invoke(Models.CaptureMode.Translate, /* autoTranslate */ true);
     }
 
     // 속성 패널 상태
@@ -1696,6 +1748,7 @@ public partial class EditorWindow : Window
                     $"설정된 언어({currentSettings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
                     "Windows 설정 > 시간 및 언어 > 언어에서 언어팩을 설치한 뒤 다시 시도해주세요.";
                 SetStatus("OCR 언어팩 없음");
+                _pendingAutoTranslate = false;
                 return;
             }
 
@@ -1708,6 +1761,7 @@ public partial class EditorWindow : Window
                 OcrPanelMeta.Text = "(텍스트 없음)";
                 OcrTextBox.Text = "";
                 SetStatus("OCR: 텍스트를 찾지 못했습니다");
+                _pendingAutoTranslate = false;
                 return;
             }
 
@@ -1718,6 +1772,14 @@ public partial class EditorWindow : Window
             OcrPanelMeta.Text = $"{text.Length}자";
             OcrSourceLangLabel.Text = langTag + fallbackNote;
             SetStatus($"OCR 완료 ({text.Length}자)");
+
+            // 번역 버튼이 트리거한 흐름이면 OCR 직후 자동 번역
+            if (_pendingAutoTranslate && !string.IsNullOrWhiteSpace(text))
+            {
+                _pendingAutoTranslate = false;
+                Dispatcher.BeginInvoke(new Action(() => OnOcrTranslateClick(this, new RoutedEventArgs())),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
         catch (Exception ex)
         {
@@ -1725,6 +1787,7 @@ public partial class EditorWindow : Window
             OcrPanelMeta.Text = "실패";
             OcrTextBox.Text = ex.Message;
             SetStatus("OCR 실패");
+            _pendingAutoTranslate = false;
         }
     }
 
