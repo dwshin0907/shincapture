@@ -125,4 +125,37 @@ public class FreeformCaptureMode : ICaptureMode
         }
         return new Rect(minX, minY, maxX - minX, maxY - minY);
     }
+
+    /// <summary>
+    /// bounding-box로 잘린 비트맵에 자유형 다각형 마스크 적용.
+    /// 다각형 외부 픽셀은 투명(Alpha=0)으로 처리.
+    /// </summary>
+    public Bitmap ApplyMask(Bitmap croppedBitmap)
+    {
+        if (_points.Count < 3 || croppedBitmap == null) return croppedBitmap!;
+
+        var bounds = GetBounds();
+
+        // overlay 좌표 → cropped 비트맵 내 픽셀 좌표
+        var localPoints = new System.Drawing.PointF[_points.Count];
+        for (int i = 0; i < _points.Count; i++)
+        {
+            localPoints[i] = new System.Drawing.PointF(
+                (float)((_points[i].X - bounds.X) * _scaleX),
+                (float)((_points[i].Y - bounds.Y) * _scaleY));
+        }
+
+        var masked = new Bitmap(croppedBitmap.Width, croppedBitmap.Height,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(masked))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(System.Drawing.Color.Transparent);
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddPolygon(localPoints);
+            g.SetClip(path);
+            g.DrawImage(croppedBitmap, 0, 0);
+        }
+        return masked;
+    }
 }

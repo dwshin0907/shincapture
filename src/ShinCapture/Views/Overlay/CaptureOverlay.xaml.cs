@@ -246,6 +246,18 @@ public partial class CaptureOverlay : Window
         }
 
         var cropped = ScreenHelper.CropBitmap(_screenBitmap, region.Value);
+
+        // 자유형 모드: 다각형 외부를 투명하게 마스킹 (bounding box → 진짜 올가미)
+        if (_mode is ShinCapture.Capture.FreeformCaptureMode ff)
+        {
+            var masked = ff.ApplyMask(cropped);
+            if (!ReferenceEquals(masked, cropped))
+            {
+                cropped.Dispose();
+                cropped = masked;
+            }
+        }
+
         Result = new CaptureResult
         {
             Image = cropped,
