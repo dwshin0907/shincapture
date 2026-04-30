@@ -47,7 +47,11 @@ public static class OcrService
 
             var softwareBitmap = await BitmapToSoftwareBitmapAsync(target);
             var result = await engine.RecognizeAsync(softwareBitmap);
-            return result.Text ?? string.Empty;
+            // result.Text는 모든 단어를 공백으로 join하여 줄바꿈을 잃는다.
+            // result.Lines를 \n으로 join하여 시각적 줄 구조 보존.
+            if (result.Lines == null || result.Lines.Count == 0)
+                return result.Text ?? string.Empty;
+            return string.Join("\n", result.Lines.Select(l => l.Text ?? string.Empty));
         }
         finally
         {
