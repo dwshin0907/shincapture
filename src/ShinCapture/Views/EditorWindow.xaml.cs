@@ -196,7 +196,7 @@ public partial class EditorWindow : Window
 
     private bool _forceClose;
 
-    /// <summary>X 버튼 → 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
+    /// <summary>X 버튼 ▸ 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
     private void OnEditorClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!_forceClose)
@@ -426,6 +426,7 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
             HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
             Margin = new Thickness(0, 0, 0, 1)
         };
 
@@ -444,14 +445,15 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Bold,
             Foreground = System.Windows.Media.Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
-            // 가장 긴 카피 기준으로 폭 확보 → 전환 시 레이아웃 흔들림 방지
-            MinWidth = 200
+            TextAlignment = TextAlignment.Center,
+            // 가장 긴 카피 기준으로 폭 확보 (20% 축소)
+            MinWidth = 160
         };
         stack.Children.Add(subText);
         stack.Children.Add(mainText);
         banner.Child = stack;
 
-        // 2.5초 간격 플래시카드: fade-out (280ms) → 텍스트 교체 → fade-in (280ms)
+        // 2.5초 간격 플래시카드: fade-out (280ms) ▸ 텍스트 교체 ▸ fade-in (280ms)
         var flashTimer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(2.5)
@@ -654,12 +656,9 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(10, 4, 10, 4),
+            Padding = new Thickness(12, 5, 12, 5),
             Margin = new Thickness(2, 1, 2, 1),
-            Background = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            Foreground = System.Windows.Media.Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
+            Style = (Style)FindResource("AccentButton"),
             ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
         };
         btn.Click += (_, _) => RunEditorOcr();
@@ -687,13 +686,10 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(10, 4, 10, 4),
+            Padding = new Thickness(12, 5, 12, 5),
             Margin = new Thickness(2, 1, 2, 1),
-            Background = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            Foreground = System.Windows.Media.Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "영역 캡쳐 → OCR → 자동 번역"
+            Style = (Style)FindResource("AccentButton"),
+            ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
         };
         btn.Click += (_, _) => RequestTranslateCapture();
         return btn;
@@ -1713,7 +1709,7 @@ public partial class EditorWindow : Window
         var win = new ApiKeyHelpWindow(_settingsManager);
         win.Owner = this;
         win.ShowDialog();
-        // 다이얼로그 닫힌 후 키가 등록됐을 수 있음 → 배너 갱신
+        // 다이얼로그 닫힌 후 키가 등록됐을 수 있음 ▸ 배너 갱신
         RefreshOcrBanner();
     }
 
@@ -1746,7 +1742,7 @@ public partial class EditorWindow : Window
             return;
         }
 
-        // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 → 디스크에서 최신 설정 로드
+        // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 ▸ 디스크에서 최신 설정 로드
         var currentSettings = _settingsManager?.Load() ?? _settings;
 
         RefreshOcrBanner();
