@@ -36,8 +36,8 @@
             <Setter Property="Margin" Value="0,0,0,10"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="#4F46E5"/>
-                    <Setter Property="Background" Value="#EEF2FF"/>
+                    <Setter Property="BorderBrush" Value="#03C75A"/>
+                    <Setter Property="Background" Value="#F0FDF4"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -149,8 +149,8 @@
             </ScrollViewer>
 
             <!-- 우측: 사이드바 -->
-            <Border Grid.Column="2" Background="#EEF2FF"
-                    BorderBrush="#C7D2FE" BorderThickness="1"
+            <Border Grid.Column="2" Background="#ECFDF5"
+                    BorderBrush="#A7E3BF" BorderThickness="1"
                     CornerRadius="10" Padding="20">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -159,7 +159,7 @@
                                    FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="외부 글에서 단계별 캡쳐와 함께 자세히 보세요."
-                               FontSize="11" Foreground="#3730A3" TextWrapping="Wrap"
+                               FontSize="11" Foreground="#15803D" TextWrapping="Wrap"
                                Margin="0,0,0,16"/>
 
                     <!-- 카드 1 -->
@@ -172,7 +172,7 @@
                                        FontSize="11" Foreground="#5F6368"
                                        TextWrapping="Wrap" Margin="0,4,0,8"/>
                             <TextBlock>
-                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#4F46E5"/>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#03C75A" FontWeight="SemiBold"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
@@ -187,7 +187,7 @@
                                        FontSize="11" Foreground="#5F6368"
                                        TextWrapping="Wrap" Margin="0,4,0,8"/>
                             <TextBlock>
-                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#4F46E5"/>
+                                <Run Text="네이버 프리미엄 →" FontSize="11" Foreground="#03C75A" FontWeight="SemiBold"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
