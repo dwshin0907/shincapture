@@ -25,6 +25,20 @@ public sealed class TranslationService
         if (string.IsNullOrWhiteSpace(text))
             return new TranslationResult { Outcome = TranslationOutcome.SkippedEmpty, OriginalText = text ?? "", TargetLanguage = targetLanguage };
 
+        // 클라이언트 측 언어 감지: 원문이 이미 대상 언어면 API 호출 없이 차단
+        // (OpenAI가 "윤문" 식으로 살짝 바꾸는 케이스 방지 + 비용 0)
+        var detected = LanguageDetector.DetectSimple(text);
+        if (detected != null && LanguageDetector.IsSameLanguage(detected, targetLanguage))
+        {
+            return new TranslationResult
+            {
+                Outcome = TranslationOutcome.SkippedSameLanguage,
+                OriginalText = text,
+                TranslatedText = text,
+                TargetLanguage = targetLanguage
+            };
+        }
+
         if (!_store.HasKey())
             return new TranslationResult { Outcome = TranslationOutcome.NoKey, OriginalText = text, TargetLanguage = targetLanguage };
 
