@@ -410,8 +410,9 @@ public partial class EditorWindow : Window
             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(13, 6, 13, 6),
+            Padding = new Thickness(10, 6, 10, 6),
             Cursor = Cursors.Hand,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Effect = shadow,
             ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
