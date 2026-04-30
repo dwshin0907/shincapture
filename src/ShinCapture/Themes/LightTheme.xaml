@@ -157,10 +157,10 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="8,6"/>
-        <Setter Property="MinWidth" Value="40"/>
-        <Setter Property="MinHeight" Value="36"/>
-        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="Padding" Value="6,5"/>
+        <Setter Property="MinWidth" Value="34"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="FontSize" Value="17"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="ToolTipService.InitialShowDelay" Value="400"/>
         <Setter Property="Template">
