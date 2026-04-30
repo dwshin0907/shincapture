@@ -83,6 +83,14 @@ public class HotkeyManager : IDisposable
                 case "printscreen":
                     vk = (uint)KeyInterop.VirtualKeyFromKey(Key.PrintScreen); break;
                 default:
+                    // 단일 숫자: "1" → Key.D1, "0" → Key.D0 (WPF Key enum is D-prefixed)
+                    if (part.Length == 1 && part[0] >= '0' && part[0] <= '9')
+                    {
+                        if (Enum.TryParse<Key>("D" + part, true, out var digitKey))
+                            vk = (uint)KeyInterop.VirtualKeyFromKey(digitKey);
+                        break;
+                    }
+                    // F-keys, alphabet, 등은 그대로 동작
                     if (Enum.TryParse<Key>(part, true, out var key))
                         vk = (uint)KeyInterop.VirtualKeyFromKey(key);
                     break;
