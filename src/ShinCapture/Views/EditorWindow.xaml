@@ -89,35 +89,145 @@
             </Border>
         </Grid>
 
-        <!-- OCR 결과 패널 (기본 숨김) -->
+        <!-- OCR 결과 패널 (기본 숨김) — 좌우 분할 디자인 -->
         <Border Grid.Row="3" x:Name="OcrPanel" Visibility="Collapsed"
+                IsVisibleChanged="OnOcrPanelVisibilityChanged"
                 Background="{DynamicResource BackgroundSecondaryBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
-                Padding="10,8">
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>   <!-- 헤더 -->
+                    <RowDefinition Height="*" MinHeight="140"/>  <!-- 좌우 분할 본문 -->
                 </Grid.RowDefinitions>
-                <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                    <TextBlock x:Name="OcrPanelTitle" Text="추출된 텍스트"
-                               FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <Button x:Name="OcrCloseBtn" Content="×" DockPanel.Dock="Right"
-                            Padding="8,0" Width="28" Height="22" FontSize="16"
-                            HorizontalAlignment="Right" Click="OnOcrClose"/>
-                </DockPanel>
-                <TextBox Grid.Row="1" x:Name="OcrTextBox" MinHeight="60" MaxHeight="160"
-                         AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto"
-                         FontFamily="Consolas"/>
-                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
-                            Margin="0,6,0,0">
-                    <Button x:Name="OcrSelectAllBtn" Content="모두 선택" Padding="10,3"
-                            Margin="0,0,6,0" Click="OnOcrSelectAll"/>
-                    <Button x:Name="OcrCopyBtn" Content="복사" Padding="14,3"
-                            Style="{DynamicResource AccentButton}" Click="OnOcrCopy"/>
-                </StackPanel>
+
+                <!-- Header -->
+                <Border Grid.Row="0" Padding="14,10"
+                        Background="{DynamicResource BackgroundPrimaryBrush}"
+                        BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
+                    <DockPanel LastChildFill="True">
+                        <Button x:Name="OcrCloseBtn" Content="✕" DockPanel.Dock="Right"
+                                Width="24" Height="22" FontSize="12" Margin="6,0,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{DynamicResource TextSecondaryBrush}"
+                                Click="OnOcrClose" Cursor="Hand"
+                                ToolTip="OCR 패널 닫기"/>
+                        <Button x:Name="OcrTranslateBtn" Content="🌐 번역" DockPanel.Dock="Right"
+                                Padding="12,3" Margin="0,0,0,0"
+                                Style="{DynamicResource AccentButton}"
+                                Click="OnOcrTranslateClick"/>
+                        <ComboBox x:Name="OcrTranslateLangBox" DockPanel.Dock="Right"
+                                  Width="100" Margin="0,0,4,0"
+                                  VerticalAlignment="Center" FontSize="12"
+                                  ToolTip="번역 대상 언어">
+                            <ComboBoxItem Tag="ko">한국어</ComboBoxItem>
+                            <ComboBoxItem Tag="en">영어</ComboBoxItem>
+                            <ComboBoxItem Tag="ja">일본어</ComboBoxItem>
+                            <ComboBoxItem Tag="zh">중국어 (간체)</ComboBoxItem>
+                        </ComboBox>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="OcrPanelTitle" Text="🔤 텍스트 추출"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="OcrPanelMeta" Text=""
+                                       FontSize="11" Margin="10,0,0,0"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- 좌우 분할 본문 -->
+                <Grid Grid.Row="1" x:Name="OcrTranslatedPanel"
+                      Background="{DynamicResource BackgroundPrimaryBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 좌측: 원문 -->
+                    <DockPanel Grid.Column="0">
+                        <Border DockPanel.Dock="Top" Padding="12,5,8,5"
+                                Background="#F8FAFC"
+                                BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <Button x:Name="OcrCopyBtn" Content="📋 복사" DockPanel.Dock="Right"
+                                        Padding="8,2" FontSize="11" Margin="6,0,0,0"
+                                        Background="Transparent" BorderBrush="{DynamicResource BorderLightBrush}"
+                                        Foreground="{DynamicResource TextSecondaryBrush}"
+                                        Cursor="Hand" Click="OnOcrCopy"
+                                        ToolTip="원문 텍스트를 클립보드에 복사"/>
+                                <TextBlock x:Name="OcrSourceLangLabel" Text="" DockPanel.Dock="Right"
+                                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <TextBlock Text="원문" FontWeight="SemiBold" FontSize="12"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
+                        <TextBox x:Name="OcrTextBox"
+                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Background="{DynamicResource BackgroundPrimaryBrush}"
+                                 BorderThickness="0" Padding="12,10"
+                                 FontFamily="Consolas" FontSize="12"/>
+                    </DockPanel>
+
+                    <!-- 가운데 구분선 -->
+                    <Border Grid.Column="1" Width="1"
+                            Background="{DynamicResource BorderLightBrush}"/>
+
+                    <!-- 우측: 번역 -->
+                    <DockPanel Grid.Column="2">
+                        <Border DockPanel.Dock="Top" Padding="12,5,8,5"
+                                Background="#F8FAFC"
+                                BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <Button x:Name="OcrTranslatedCopyBtn" Content="📋 복사" DockPanel.Dock="Right"
+                                        Padding="8,2" FontSize="11" Margin="6,0,0,0"
+                                        Background="Transparent" BorderBrush="{DynamicResource BorderLightBrush}"
+                                        Foreground="{DynamicResource TextSecondaryBrush}"
+                                        Cursor="Hand" Click="OnOcrTranslatedCopyClick"
+                                        ToolTip="번역문을 클립보드에 복사"/>
+                                <TextBlock x:Name="OcrTargetLangLabel" Text="" DockPanel.Dock="Right"
+                                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <TextBlock x:Name="OcrTranslatedTitle" Text="번역"
+                                           FontWeight="SemiBold" FontSize="12"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
+                        <!-- API 키 미설정 시에만 표시되는 배너 -->
+                        <Border x:Name="OcrApiKeyBanner" DockPanel.Dock="Bottom" Visibility="Collapsed"
+                                Background="#FEF3C7"
+                                BorderBrush="#FCD34D" BorderThickness="0,1,0,0"
+                                Padding="12,8" Cursor="Hand"
+                                MouseLeftButtonUp="OnApiKeyBannerClick"
+                                ToolTip="클릭하면 API 키 발급 가이드가 열립니다">
+                            <DockPanel>
+                                <TextBlock Text="→" DockPanel.Dock="Right" FontSize="12"
+                                           Foreground="#92400E" VerticalAlignment="Center"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#92400E" FontSize="11">
+                                    🔑 번역 기능을 쓰려면 OpenAI API 키 등록이 필요합니다 — <Bold>발급법 보기</Bold>
+                                </TextBlock>
+                            </DockPanel>
+                        </Border>
+                        <Grid>
+                            <TextBox x:Name="OcrTranslatedBox"
+                                     IsReadOnly="True" AcceptsReturn="True"
+                                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Background="#FAFBFC"
+                                     BorderThickness="0" Padding="12,10"
+                                     FontFamily="Consolas" FontSize="12"/>
+                            <TextBlock x:Name="OcrTranslatedPlaceholder"
+                                       Text="🌐 번역 버튼을 눌러 번역하세요"
+                                       Foreground="{DynamicResource TextDisabledBrush}"
+                                       FontSize="12" Padding="14,12"
+                                       IsHitTestVisible="False"
+                                       VerticalAlignment="Top" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </DockPanel>
+                </Grid>
+
             </Grid>
         </Border>
 
@@ -139,7 +249,15 @@
                            ToolTip="popolong@naver.com">
                     <TextBlock.Text>문의/제휴</TextBlock.Text>
                 </TextBlock>
+                <Button Content="🔑 API 키 발급법" Margin="16,0,0,0"
+                        Style="{DynamicResource AccentButton}"
+                        Padding="14,5" FontSize="11"
+                        Click="OnApiKeyHelpClick"
+                        ToolTip="OpenAI API 키 발급 + 설정 가이드"
+                        DockPanel.Dock="Left"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="⚙&#xFE0E; 설정" Margin="0,0,4,0"
+                            Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>
                     <Button x:Name="CopyBtn" Content="복사" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnCopyClick"/>
                     <Button x:Name="SaveAsBtn" Content="다른이름저장" Margin="0,0,4,0"

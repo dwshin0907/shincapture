@@ -38,8 +38,10 @@ Services/Ai/
 ├── IAiCredentialStore.cs       (인터페이스 — 테스트 모킹용)
 ├── DpapiCredentialStore.cs     (DPAPI 구현, apikey.dat 입출력)
 ├── OpenAiClient.cs             (HTTP 게이트웨이, TLS+도메인 검증)
-├── TranslationService.cs       (OCR 텍스트 → 번역문)
-└── AiSettings.cs               (모델/대상언어/타임아웃 DTO)
+└── TranslationService.cs       (OCR 텍스트 → 번역문)
+
+Models/
+└── AppSettings.cs              (기존 파일에 AiSettings 클래스 추가 — 모든 DTO가 이 파일에 모이는 기존 패턴 유지)
 
 UI/Settings/
 └── AiSettingsTab.xaml          (설정창 신규 탭)

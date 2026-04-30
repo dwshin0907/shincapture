@@ -33,6 +33,11 @@ public partial class EditorWindow : Window
     private static readonly List<BitmapSource> _captureHistory = new();
     private const int MaxHistory = 50;
 
+    /// <summary>편집기에서 새 캡쳐를 요청. (mode, autoTranslate)</summary>
+    public event Action<Models.CaptureMode, bool>? CaptureRequested;
+
+    private bool _pendingAutoTranslate;
+
     // 캡쳐별 편집 상태 보존
     private readonly Dictionary<BitmapSource, List<EditorObject>> _captureObjects = new();
 
@@ -105,7 +110,9 @@ public partial class EditorWindow : Window
     }
 
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
-    public void LoadNewCapture(Bitmap capturedImage)
+    /// <param name="autoOcr">true이면 로드 직후 OCR을 자동 실행 (Translate 모드 전용)</param>
+    /// <param name="autoTranslate">true이면 OCR 직후 자동 번역 실행 (번역 버튼 흐름 전용)</param>
+    public void LoadNewCapture(Bitmap capturedImage, bool autoOcr = false, bool autoTranslate = false)
     {
         // 현재 편집 상태 저장
         SaveCurrentObjects();
@@ -131,8 +138,31 @@ public partial class EditorWindow : Window
         {
             OcrPanel.Visibility = Visibility.Collapsed;
             OcrTextBox.Text = "";
-            OcrPanelTitle.Text = "추출된 텍스트";
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = "";
+            OcrSourceLangLabel.Text = "";
+            OcrTranslatedBox.Text = "";
+            OcrTargetLangLabel.Text = "";
+            if (OcrTranslatedPlaceholder != null)
+                OcrTranslatedPlaceholder.Visibility = Visibility.Visible;
         }
+
+        if (autoOcr)
+        {
+            _pendingAutoTranslate = autoTranslate;
+            Dispatcher.BeginInvoke(new Action(RunEditorOcr),
+                System.Windows.Threading.DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>외부(MainWindow)에서 OCR 자동 실행을 트리거할 때 사용 (새 EditorWindow 생성 시)</summary>
+    public void TriggerAutoOcr() => TriggerAutoOcr(false);
+
+    /// <summary>autoTranslate 플래그를 함께 지정하여 OCR 자동 실행</summary>
+    public void TriggerAutoOcr(bool autoTranslate)
+    {
+        _pendingAutoTranslate = autoTranslate;
+        RunEditorOcr();
     }
 
     /// <summary>기록에서 이미지를 메인 화면에 로드</summary>
@@ -166,7 +196,7 @@ public partial class EditorWindow : Window
 
     private bool _forceClose;
 
-    /// <summary>X 버튼 → 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
+    /// <summary>X 버튼 ▸ 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
     private void OnEditorClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!_forceClose)
@@ -339,6 +369,9 @@ public partial class EditorWindow : Window
         ToolbarPanel.Children.Add(ocrBtn);
         _toolButtons["OCR"] = ocrBtn;
 
+        // 번역 버튼 — OCR 버튼 바로 오른쪽
+        ToolbarPanel.Children.Add(CreateTranslateActionButton());
+
         ToolbarPanel.Children.Add(CreateSeparator());
 
         var undoBtn = CreateToolButton("\u21A9", "실행취소 (Ctrl+Z)"); // ↩
@@ -377,8 +410,9 @@ public partial class EditorWindow : Window
             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(13, 6, 13, 6),
+            Padding = new Thickness(10, 6, 10, 6),
             Cursor = Cursors.Hand,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Effect = shadow,
             ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
@@ -392,6 +426,7 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
             HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
             Margin = new Thickness(0, 0, 0, 1)
         };
 
@@ -410,14 +445,15 @@ public partial class EditorWindow : Window
             FontWeight = FontWeights.Bold,
             Foreground = System.Windows.Media.Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
-            // 가장 긴 카피 기준으로 폭 확보 → 전환 시 레이아웃 흔들림 방지
-            MinWidth = 200
+            TextAlignment = TextAlignment.Center,
+            // 메시지 길이가 달라도 폭이 흔들리지 않게 고정
+            Width = 200
         };
         stack.Children.Add(subText);
         stack.Children.Add(mainText);
         banner.Child = stack;
 
-        // 2.5초 간격 플래시카드: fade-out (280ms) → 텍스트 교체 → fade-in (280ms)
+        // 2.5초 간격 플래시카드: fade-out (280ms) ▸ 텍스트 교체 ▸ fade-in (280ms)
         var flashTimer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(2.5)
@@ -605,14 +641,14 @@ public partial class EditorWindow : Window
         sp.Children.Add(new TextBlock
         {
             Text = "\U0001F524",  // 🔤
-            FontSize = 16,
+            FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 4, 0)
+            Margin = new Thickness(0, 0, 3, 0)
         });
         sp.Children.Add(new TextBlock
         {
             Text = "텍스트 추출",
-            FontSize = 13,
+            FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -620,16 +656,50 @@ public partial class EditorWindow : Window
         var btn = new Button
         {
             Content = sp,
-            Padding = new Thickness(10, 4, 10, 4),
+            Padding = new Thickness(9, 0, 9, 0),
             Margin = new Thickness(2, 1, 2, 1),
-            Background = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            Foreground = System.Windows.Media.Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
+            Height = 22,
+            Style = (Style)FindResource("AccentButton"),
             ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
         };
         btn.Click += (_, _) => RunEditorOcr();
         return btn;
+    }
+
+    private Button CreateTranslateActionButton()
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock
+        {
+            Text = "\U0001F310",  // 🌐
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 3, 0)
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = "번역",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btn = new Button
+        {
+            Content = sp,
+            Padding = new Thickness(9, 0, 9, 0),
+            Margin = new Thickness(2, 1, 2, 1),
+            Height = 22,
+            Style = (Style)FindResource("AccentButton"),
+            ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
+        };
+        btn.Click += (_, _) => RequestTranslateCapture();
+        return btn;
+    }
+
+    private void RequestTranslateCapture()
+    {
+        CaptureRequested?.Invoke(Models.CaptureMode.Translate, /* autoTranslate */ true);
     }
 
     // 속성 패널 상태
@@ -1318,7 +1388,7 @@ public partial class EditorWindow : Window
             var miCopy = new MenuItem { Header = "클립보드 복사" };
             miCopy.Click += (_, _) =>
             {
-                System.Windows.Clipboard.SetImage(localImg);
+                BitmapHelper.SetClipboardPng(localImg);
                 StatusText.Text = "클립보드에 복사됨";
             };
             ctx.Items.Add(miCopy);
@@ -1592,7 +1662,7 @@ public partial class EditorWindow : Window
         var path = _saveManager.SaveAuto(rendered, _settings);
         StatusText.Text = $"저장됨: {path}";
         if (_settings.Save.CopyToClipboard)
-            System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(rendered));
+            BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
         rendered.Dispose();
     }
 
@@ -1608,9 +1678,41 @@ public partial class EditorWindow : Window
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         var rendered = RenderFinalImage();
-        System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(rendered));
+        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
         StatusText.Text = "클립보드에 복사됨";
         rendered.Dispose();
+    }
+
+    private void OnEditorSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (_settingsManager == null) return;
+        // 단축키 탭(4번째, 인덱스 3 — 일반/캡쳐/저장/단축키/지정사이즈/AI)을 기본 선택
+        var win = new SettingsWindow(_settingsManager, initialTabIndex: 3);
+        win.Owner = this;
+        win.ShowDialog();
+    }
+
+    private void OnApiKeyHelpClick(object sender, RoutedEventArgs e)
+    {
+        var win = new ApiKeyHelpWindow(_settingsManager);
+        win.Owner = this;
+        win.ShowDialog();
+    }
+
+    private void RefreshOcrBanner()
+    {
+        if (OcrApiKeyBanner == null) return;
+        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
+        OcrApiKeyBanner.Visibility = store.HasKey() ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnApiKeyBannerClick(object sender, MouseButtonEventArgs e)
+    {
+        var win = new ApiKeyHelpWindow(_settingsManager);
+        win.Owner = this;
+        win.ShowDialog();
+        // 다이얼로그 닫힌 후 키가 등록됐을 수 있음 ▸ 배너 갱신
+        RefreshOcrBanner();
     }
 
     private Bitmap RenderFinalImage()
@@ -1642,24 +1744,34 @@ public partial class EditorWindow : Window
             return;
         }
 
-        // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 → 디스크에서 최신 설정 로드
+        // 이미 열려있는 편집기가 구식 _settings 객체를 잡고 있을 수 있음 ▸ 디스크에서 최신 설정 로드
         var currentSettings = _settingsManager?.Load() ?? _settings;
 
+        RefreshOcrBanner();
         SetStatus("OCR 실행 중...");
         OcrPanel.Visibility = Visibility.Visible;
-        OcrPanelTitle.Text = "추출된 텍스트 (추출 중…)";
+        OcrPanelTitle.Text = "🔤 텍스트 추출";
+        OcrPanelMeta.Text = "추출 중…";
         OcrTextBox.Text = "";
+        OcrSourceLangLabel.Text = "";
+        // 우측 번역 패널 초기화 (placeholder 표시)
+        OcrTranslatedBox.Text = "";
+        OcrTargetLangLabel.Text = "";
+        if (OcrTranslatedPlaceholder != null)
+            OcrTranslatedPlaceholder.Visibility = Visibility.Visible;
 
         try
         {
             var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(currentSettings.Ocr.Language);
             if (langTag == null)
             {
-                OcrPanelTitle.Text = "OCR 언어팩이 필요합니다";
+                OcrPanelTitle.Text = "🔤 텍스트 추출";
+                OcrPanelMeta.Text = "OCR 언어팩 필요";
                 OcrTextBox.Text =
                     $"설정된 언어({currentSettings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
                     "Windows 설정 > 시간 및 언어 > 언어에서 언어팩을 설치한 뒤 다시 시도해주세요.";
                 SetStatus("OCR 언어팩 없음");
+                _pendingAutoTranslate = false;
                 return;
             }
 
@@ -1669,23 +1781,48 @@ public partial class EditorWindow : Window
 
             if (string.IsNullOrWhiteSpace(text))
             {
-                OcrPanelTitle.Text = "추출된 텍스트 없음";
+                OcrPanelMeta.Text = "(텍스트 없음)";
                 OcrTextBox.Text = "";
                 SetStatus("OCR: 텍스트를 찾지 못했습니다");
+                _pendingAutoTranslate = false;
                 return;
             }
 
             OcrTextBox.Text = text;
-            var tagNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
-                ? "" : $" — {langTag} 폴백";
-            OcrPanelTitle.Text = $"추출된 텍스트 ({text.Length}자{tagNote})";
+            var fallbackNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
+                ? "" : $" (폴백)";
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = $"{text.Length}자";
+            OcrSourceLangLabel.Text = langTag + fallbackNote;
             SetStatus($"OCR 완료 ({text.Length}자)");
+
+            // 대상 언어 드롭다운 자동 선택: OCR 결과가 한국어면 영어, 그 외면 한국어
+            var detected = ShinCapture.Services.Ai.LanguageDetector.DetectSimple(text);
+            string autoTarget = (detected == "ko") ? "en" : "ko";
+            foreach (System.Windows.Controls.ComboBoxItem item in OcrTranslateLangBox.Items)
+            {
+                if ((string)item.Tag == autoTarget)
+                {
+                    OcrTranslateLangBox.SelectedItem = item;
+                    break;
+                }
+            }
+
+            // 번역 버튼이 트리거한 흐름이면 OCR 직후 자동 번역
+            if (_pendingAutoTranslate && !string.IsNullOrWhiteSpace(text))
+            {
+                _pendingAutoTranslate = false;
+                Dispatcher.BeginInvoke(new Action(() => OnOcrTranslateClick(this, new RoutedEventArgs())),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
         catch (Exception ex)
         {
-            OcrPanelTitle.Text = "OCR 실패";
+            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelMeta.Text = "실패";
             OcrTextBox.Text = ex.Message;
             SetStatus("OCR 실패");
+            _pendingAutoTranslate = false;
         }
     }
 
@@ -1704,6 +1841,45 @@ public partial class EditorWindow : Window
         OcrPanel.Visibility = Visibility.Collapsed;
     }
 
+    private double _editorHeightBeforeOcr = -1;
+
+    private void OnOcrPanelVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is not bool isVisible) return;
+        if (isVisible)
+        {
+            RefreshOcrBanner();
+            // 처음 보일 때만 원래 높이 저장
+            if (_editorHeightBeforeOcr < 0) _editorHeightBeforeOcr = this.Height;
+            // 레이아웃 완료 후 측정해야 ActualHeight가 정확
+            Dispatcher.BeginInvoke(new Action(GrowWindowForOcrPanel),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        else
+        {
+            // 닫힐 때 원래 높이로 복원 (사용자가 그 사이 리사이즈한 영향은 무시)
+            if (_editorHeightBeforeOcr > 0)
+            {
+                this.Height = _editorHeightBeforeOcr;
+                _editorHeightBeforeOcr = -1;
+            }
+        }
+    }
+
+    private void GrowWindowForOcrPanel()
+    {
+        var panelHeight = OcrPanel.ActualHeight;
+        if (panelHeight <= 0) return;
+        var workArea = System.Windows.SystemParameters.WorkArea;
+        var maxHeight = workArea.Height - 20;
+        var desired = this.Height + panelHeight;
+        if (desired > maxHeight) desired = maxHeight;
+        this.Height = desired;
+        // 화면 밖으로 안 나가게 위치 조정
+        if (this.Top + this.Height > workArea.Bottom)
+            this.Top = Math.Max(workArea.Top, workArea.Bottom - this.Height);
+    }
+
     private void OnOcrSelectAll(object sender, RoutedEventArgs e)
     {
         OcrTextBox.SelectAll();
@@ -1715,5 +1891,76 @@ public partial class EditorWindow : Window
         if (string.IsNullOrEmpty(OcrTextBox.Text)) return;
         System.Windows.Clipboard.SetText(OcrTextBox.Text);
         SetStatus($"텍스트 복사됨 ({OcrTextBox.Text.Length}자)");
+    }
+
+    private async void OnOcrTranslateClick(object sender, RoutedEventArgs e)
+    {
+        var text = OcrTextBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            SetStatus("번역: 추출된 텍스트가 없습니다");
+            return;
+        }
+
+        var settings = _settingsManager?.Load() ?? _settings;
+        if (!settings.Ai.Enabled)
+        {
+            SetStatus("번역: 설정 > AI 탭에서 활성화 필요");
+            return;
+        }
+
+        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
+        if (!store.HasKey())
+        {
+            SetStatus("번역: AI 키가 필요합니다 (설정 > AI)");
+            return;
+        }
+
+        string targetLang = settings.Ai.TargetLanguage;
+        if (OcrTranslateLangBox.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag)
+            targetLang = tag;
+
+        if (OcrTranslatedPlaceholder != null)
+            OcrTranslatedPlaceholder.Visibility = Visibility.Collapsed;
+        OcrTranslatedBox.Text = "번역 중…";
+        OcrTargetLangLabel.Text = targetLang;
+        SetStatus("번역 실행 중…");
+
+        var openAi = ShinCapture.Services.Ai.OpenAiClient.CreateDefault(settings.Ai.TimeoutSeconds);
+        var svc = new ShinCapture.Services.Ai.TranslationService(store, openAi);
+
+        try
+        {
+            var r = await svc.TranslateAsync(text, targetLang, settings.Ai.Model);
+            switch (r.Outcome)
+            {
+                case ShinCapture.Services.Ai.TranslationOutcome.Success:
+                    OcrTranslatedBox.Text = r.TranslatedText;
+                    OcrTargetLangLabel.Text = targetLang;
+                    SetStatus($"번역 완료 ({r.TranslatedText.Length}자, {targetLang})");
+                    break;
+                case ShinCapture.Services.Ai.TranslationOutcome.SkippedSameLanguage:
+                    OcrTranslatedBox.Text = r.OriginalText;
+                    OcrTargetLangLabel.Text = $"{targetLang} (동일)";
+                    SetStatus($"이미 {targetLang}입니다");
+                    break;
+                default:
+                    OcrTranslatedBox.Text = "(번역 결과 없음)";
+                    SetStatus("번역 결과 없음");
+                    break;
+            }
+        }
+        catch (ShinCapture.Services.Ai.OpenAiException ex)
+        {
+            OcrTranslatedBox.Text = $"번역 실패: {ex.Message}";
+            SetStatus($"번역 실패 — {ex.Kind}");
+        }
+    }
+
+    private void OnOcrTranslatedCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(OcrTranslatedBox.Text)) return;
+        System.Windows.Clipboard.SetText(OcrTranslatedBox.Text);
+        SetStatus($"번역문 복사됨 ({OcrTranslatedBox.Text.Length}자)");
     }
 }

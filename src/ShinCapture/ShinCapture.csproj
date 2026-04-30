@@ -10,17 +10,22 @@
     <AssemblyName>ShinCapture</AssemblyName>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <RootNamespace>ShinCapture</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 용량 최적화 (~30-40% 절약). 압축은 첫 실행 시 한 번 풀림. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- ReadyToRun(미리 ngen)을 끄면 추가로 절약, 시작 1~2초 느려짐 트레이드 -->
+    <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="2.88.*" />
     <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.*" />
     <PackageReference Include="System.Drawing.Common" Version="8.*" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.*" />
     <PackageReference Include="System.Windows.Extensions" Version="8.*" />
   </ItemGroup>
 

@@ -11,6 +11,7 @@ public class AppSettings
     public SaveSettings Save { get; set; } = new();
     public HotkeySettings Hotkeys { get; set; } = new();
     public OcrSettings Ocr { get; set; } = new();
+    public AiSettings Ai { get; set; } = new();
     public List<FixedSizePreset>? FixedSizes { get; set; } = new()
     {
         new() { Name = "HD", Width = 1280, Height = 720 },
@@ -49,6 +50,7 @@ public class SaveSettings
 public class HotkeySettings
 {
     public string RegionCapture { get; set; } = "PrintScreen";
+    public string RegionCaptureAlt { get; set; } = "Ctrl+Shift+C";
     public string FreeformCapture { get; set; } = "Ctrl+Shift+F";
     public string WindowCapture { get; set; } = "Ctrl+Shift+W";
     public string ElementCapture { get; set; } = "Ctrl+Shift+D";
@@ -56,6 +58,7 @@ public class HotkeySettings
     public string ScrollCapture { get; set; } = "Ctrl+Shift+S";
     public string FixedSizeCapture { get; set; } = "Ctrl+Shift+Z";
     public string TextCapture { get; set; } = "Ctrl+Shift+T";
+    public string TranslateCapture { get; set; } = "Ctrl+Shift+L";
 
     // true: PrintScreen 키를 신캡쳐가 독점 (Windows Snipping Tool 선점 해제)
     // false: Windows 기본 동작에 양보 (PrintScreen → Snipping Tool)
@@ -71,4 +74,14 @@ public class OcrSettings
 {
     public string Language { get; set; } = "ko";
     public bool UpscaleSmallImages { get; set; } = true;
+}
+
+public class AiSettings
+{
+    public bool Enabled { get; set; } = false;
+    public string Provider { get; set; } = "openai";
+    public string Model { get; set; } = "gpt-4o-mini";
+    public string TargetLanguage { get; set; } = "ko";
+    public int TimeoutSeconds { get; set; } = 15;
+    public DateTime? LastValidatedAt { get; set; } = null;
 }

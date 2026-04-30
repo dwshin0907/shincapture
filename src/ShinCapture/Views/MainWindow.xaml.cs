@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly SaveManager _saveManager;
     private AppSettings _settings;
     private CaptureMode _lastCaptureMode = CaptureMode.Region;
+    private bool _editorAutoTranslate;
 
     public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
@@ -27,6 +28,7 @@ public partial class MainWindow : Window
         _saveManager = saveManager;
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
+        _settingsManager.SettingsChanged += OnExternalSettingsChanged;
 
         Icon? trayIcon = null;
         try
@@ -53,6 +55,9 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        VersionLabel.Text = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
+
         _hotkeyManager.Initialize(this);
         RegisterHotkeys();
         PopulateCaptureGrid();
@@ -72,8 +77,9 @@ public partial class MainWindow : Window
         // PrintScreen 등록
         int psResult = _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
 
-        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응
-        _hotkeyManager.Register("Ctrl+Shift+C", () => StartCapture(CaptureMode.Region));
+        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응 + 사용자 커스터마이징 가능
+        if (!string.IsNullOrWhiteSpace(_settings.Hotkeys.RegionCaptureAlt))
+            _hotkeyManager.Register(_settings.Hotkeys.RegionCaptureAlt, () => StartCapture(CaptureMode.Region));
 
         _hotkeyManager.Register(_settings.Hotkeys.FreeformCapture, () => StartCapture(CaptureMode.Freeform));
         _hotkeyManager.Register(_settings.Hotkeys.WindowCapture, () => StartCapture(CaptureMode.Window));
@@ -82,6 +88,7 @@ public partial class MainWindow : Window
         _hotkeyManager.Register(_settings.Hotkeys.ScrollCapture, () => StartCapture(CaptureMode.Scroll));
         _hotkeyManager.Register(_settings.Hotkeys.FixedSizeCapture, () => StartCapture(CaptureMode.FixedSize));
         _hotkeyManager.Register(_settings.Hotkeys.TextCapture, () => StartCapture(CaptureMode.Text));
+        _hotkeyManager.Register(_settings.Hotkeys.TranslateCapture, () => StartCapture(CaptureMode.Translate));
     }
 
     private void StartCapture(CaptureMode mode)
@@ -142,6 +149,15 @@ public partial class MainWindow : Window
 
     private EditorWindow? _editorWindow;
 
+    private void SubscribeCaptureRequested(EditorWindow editor)
+    {
+        editor.CaptureRequested += (mode, autoTranslate) =>
+        {
+            _editorAutoTranslate = autoTranslate;
+            StartCapture(mode);
+        };
+    }
+
     private void HandleCaptureResult(CaptureResult result)
     {
         // 텍스트 캡쳐 모드: OCR → 클립보드(텍스트) → 토스트. 이미지 클립보드/편집기 분기 X.
@@ -150,16 +166,18 @@ public partial class MainWindow : Window
             RunOcrAndNotify(result.Image);
             return;
         }
-
-        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통)
-        System.Windows.Clipboard.SetImage(BitmapHelper.ToBitmapSource(result.Image));
+        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통, PNG 형식만 — 자유형 알파 보존)
+        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(result.Image));
 
         switch (_settings.Capture.AfterCapture)
         {
             case AfterCaptureAction.OpenEditor:
+                bool autoOcr = (_lastCaptureMode == CaptureMode.Translate);
+                bool autoTranslate = autoOcr && _editorAutoTranslate;
+                _editorAutoTranslate = false;
                 if (_editorWindow != null)
                 {
-                    _editorWindow.LoadNewCapture(result.Image);
+                    _editorWindow.LoadNewCapture(result.Image, autoOcr, autoTranslate);
                     _editorWindow.Show();
                     _editorWindow.WindowState = WindowState.Normal;
                     _editorWindow.Topmost = true;
@@ -169,6 +187,15 @@ public partial class MainWindow : Window
                 else
                 {
                     _editorWindow = new EditorWindow(result.Image, _saveManager, _settings, _settingsManager);
+                    SubscribeCaptureRequested(_editorWindow);
+                    if (autoOcr)
+                    {
+                        bool localAutoTranslate = autoTranslate;
+                        _editorWindow.Loaded += (_, _) =>
+                            _editorWindow.Dispatcher.BeginInvoke(
+                                new Action(() => _editorWindow.TriggerAutoOcr(localAutoTranslate)),
+                                System.Windows.Threading.DispatcherPriority.Background);
+                    }
                     _editorWindow.Show();
                     _editorWindow.Activate();
                 }
@@ -252,8 +279,13 @@ public partial class MainWindow : Window
         menu.Items.Add("✏ 편집기 열기", null, (_, _) => ShowEditor());
         menu.Items.Add("📁 저장 폴더 열기", null, (_, _) => OpenSaveFolder());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("⚙ 환경설정", null, (_, _) => OpenSettings());
+        menu.Items.Add("⚙︎ 환경설정", null, (_, _) => OpenSettings());
         menu.Items.Add("ℹ 신캡쳐 정보", null, (_, _) => ShowAbout());
+        menu.Items.Add("🔑 API 키 발급 안내", null, (_, _) =>
+        {
+            var win = new Views.ApiKeyHelpWindow(_settingsManager);
+            win.ShowDialog();
+        });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("✕ 종료", null, (_, _) => ExitApplication());
         return menu;
@@ -287,6 +319,7 @@ public partial class MainWindow : Window
             using (var g = System.Drawing.Graphics.FromImage(blank))
                 g.Clear(System.Drawing.Color.White);
             _editorWindow = new EditorWindow(blank, _saveManager, _settings, _settingsManager);
+            SubscribeCaptureRequested(_editorWindow);
             _editorWindow.Show();
             _editorWindow.Activate();
         }
@@ -319,9 +352,11 @@ public partial class MainWindow : Window
             Text = "신캡쳐 (ShinCapture)",
             FontSize = 20, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2)
         });
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionStr = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
         sp.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Text = "v1.0.0 — 무료 스크린캡쳐 & 편집 도구",
+            Text = $"{versionStr} — 무료 스크린캡쳐 & 편집 도구",
             FontSize = 12, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 16)
         });
@@ -473,6 +508,17 @@ public partial class MainWindow : Window
             btn.Click += (_, _) => StartCapture(localMode);
             CaptureModesPanel.Items.Add(btn);
         }
+    }
+
+    private void OnExternalSettingsChanged(object? sender, EventArgs e)
+    {
+        // SettingsManager.Save() raises this event after persisting to disk.
+        // Marshal to UI thread (event source thread is whoever called Save).
+        Dispatcher.Invoke(() =>
+        {
+            _settings = _settingsManager.Load();
+            RegisterHotkeys();
+        });
     }
 
     private void ExitApplication()
