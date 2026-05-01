@@ -35,33 +35,33 @@ public static class BitmapHelper
     }
 
     /// <summary>
-    /// 클립보드에 이미지를 PNG + 표준 Bitmap 둘 다 넣는다.
-    /// - PNG 키: 포토샵/디스코드 등은 PNG 우선 → 알파 채널 보존
-    /// - 표준 Bitmap: 카카오톡/MS Office 등은 CF_BITMAP/CF_DIB 우선 → 호환성
-    /// 표준 Bitmap fallback에서는 알파 영역이 검정으로 안 보이도록 흰색 배경 합성.
+    /// 클립보드에 이미지를 PNG + System.Drawing.Bitmap 듀얼로 등록한다.
+    /// - PNG 형식: 포토샵/디스코드 등이 우선 인식 → 알파 채널 보존
+    /// - System.Drawing.Bitmap: WinForms 클립보드가 자동으로 CF_BITMAP + CF_DIB로 등록
+    ///   → PowerPoint/Word/한글/카카오톡/메모장 등 데스크톱 앱 호환성 최대.
+    /// 알파 영역은 흰배경으로 합성된 Bitmap을 별도 등록 (검정 사각형 방지).
     /// </summary>
     public static void SetClipboardPng(BitmapSource source)
     {
         if (source == null) return;
         try
         {
-            var dataObj = new System.Windows.DataObject();
+            // PNG 스트림 (알파 채널 보존)
+            var pngStream = new MemoryStream();
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            encoder.Save(pngStream);
+            pngStream.Position = 0;
 
-            // 1) PNG 형식 (알파 보존)
-            using (var pngStream = new MemoryStream())
-            {
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(source));
-                encoder.Save(pngStream);
-                pngStream.Position = 0;
-                dataObj.SetData("PNG", pngStream);
-            }
+            // System.Drawing.Bitmap (흰배경 합성, CF_BITMAP/CF_DIB로 등록될 형식)
+            using var rawBmp = ToBitmap(source);
+            var flatBmp = FlattenAlphaToWhite(rawBmp);
 
-            // 2) 표준 Bitmap (CF_BITMAP/CF_DIB) — 카톡 등 호환. 알파는 흰 배경으로 합성.
-            var flat = FlattenAlphaToWhite(source);
-            dataObj.SetImage(flat);
+            var dataObj = new System.Windows.Forms.DataObject();
+            dataObj.SetData("PNG", false, pngStream);
+            dataObj.SetData(System.Windows.Forms.DataFormats.Bitmap, true, flatBmp);
 
-            System.Windows.Clipboard.SetDataObject(dataObj, copy: true);
+            System.Windows.Forms.Clipboard.SetDataObject(dataObj, copy: true);
         }
         catch
         {
@@ -70,24 +70,16 @@ public static class BitmapHelper
         }
     }
 
-    /// <summary>알파 채널을 흰색 배경으로 합성한 BitmapSource 반환 (자유형 캡쳐 등 투명 영역 처리).</summary>
-    private static BitmapSource FlattenAlphaToWhite(BitmapSource source)
+    /// <summary>System.Drawing.Bitmap의 알파 채널을 흰색 배경으로 합성. 32bpp ARGB → 24bpp RGB.</summary>
+    private static Bitmap FlattenAlphaToWhite(Bitmap source)
     {
-        int w = source.PixelWidth;
-        int h = source.PixelHeight;
-        var dv = new System.Windows.Media.DrawingVisual();
-        using (var ctx = dv.RenderOpen())
+        var flat = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb);
+        flat.SetResolution(source.HorizontalResolution, source.VerticalResolution);
+        using (var g = Graphics.FromImage(flat))
         {
-            ctx.DrawRectangle(System.Windows.Media.Brushes.White, null,
-                new System.Windows.Rect(0, 0, w, h));
-            ctx.DrawImage(source, new System.Windows.Rect(0, 0, w, h));
+            g.Clear(Color.White);
+            g.DrawImage(source, 0, 0, source.Width, source.Height);
         }
-        var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
-            w, h, source.DpiX > 0 ? source.DpiX : 96.0,
-            source.DpiY > 0 ? source.DpiY : 96.0,
-            System.Windows.Media.PixelFormats.Pbgra32);
-        rtb.Render(dv);
-        rtb.Freeze();
-        return rtb;
+        return flat;
     }
 }
