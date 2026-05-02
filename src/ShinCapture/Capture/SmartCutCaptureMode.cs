@@ -95,11 +95,11 @@ public class SmartCutCaptureMode : ICaptureMode
     {
         if (!IsComplete || _points.Count == 0) return null;
         var bounds = GetBounds();
-        return new Rectangle(
-            (int)(bounds.Left * _scaleX),
-            (int)(bounds.Top * _scaleY),
-            (int)(bounds.Width * _scaleX),
-            (int)(bounds.Height * _scaleY));
+        int x = (int)Math.Round(bounds.Left * _scaleX);
+        int y = (int)Math.Round(bounds.Top * _scaleY);
+        int right = (int)Math.Round((bounds.Left + bounds.Width) * _scaleX);
+        int bottom = (int)Math.Round((bounds.Top + bounds.Height) * _scaleY);
+        return new Rectangle(x, y, right - x, bottom - y);
     }
 
     private System.Windows.Rect GetBounds()

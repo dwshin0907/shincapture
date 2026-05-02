@@ -121,11 +121,12 @@ public class RegionCaptureMode : ICaptureMode
         if (!_isDragging && !IsComplete) return null;
 
         var rect = GetLogicalRect();
-        return new Rectangle(
-            (int)(rect.Left * _scaleX),
-            (int)(rect.Top * _scaleY),
-            (int)(rect.Width * _scaleX),
-            (int)(rect.Height * _scaleY));
+        // Math.Round로 floor 누적 오차 제거 — DPI 1.25/1.5 등에서 1~2px 위/왼쪽 어긋남 방지
+        int x = (int)Math.Round(rect.Left * _scaleX);
+        int y = (int)Math.Round(rect.Top * _scaleY);
+        int right = (int)Math.Round((rect.Left + rect.Width) * _scaleX);
+        int bottom = (int)Math.Round((rect.Top + rect.Height) * _scaleY);
+        return new Rectangle(x, y, right - x, bottom - y);
     }
 
     private Rect GetLogicalRect()
