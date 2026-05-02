@@ -372,6 +372,9 @@ public partial class EditorWindow : Window
         // 번역 버튼 — OCR 버튼 바로 오른쪽
         ToolbarPanel.Children.Add(CreateTranslateActionButton());
 
+        // 스마트 컷 버튼 — GrabCut 객체 추출
+        ToolbarPanel.Children.Add(CreateSmartCutActionButton());
+
         ToolbarPanel.Children.Add(CreateSeparator());
 
         var undoBtn = CreateToolButton("\u21A9", "실행취소 (Ctrl+Z)"); // ↩
@@ -700,6 +703,42 @@ public partial class EditorWindow : Window
     private void RequestTranslateCapture()
     {
         CaptureRequested?.Invoke(Models.CaptureMode.Translate, /* autoTranslate */ true);
+    }
+
+    private Button CreateSmartCutActionButton()
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock
+        {
+            Text = "✨",  // ✨
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 3, 0)
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = "스마트 컷",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btn = new Button
+        {
+            Content = sp,
+            Padding = new Thickness(9, 0, 9, 0),
+            Margin = new Thickness(2, 1, 2, 1),
+            Height = 22,
+            Style = (Style)FindResource("AccentButton"),
+            ToolTip = "자유형 영역 ▸ GrabCut 자동 객체 추출 (배경 투명 PNG)"
+        };
+        btn.Click += (_, _) => RequestSmartCutCapture();
+        return btn;
+    }
+
+    private void RequestSmartCutCapture()
+    {
+        CaptureRequested?.Invoke(Models.CaptureMode.SmartCut, /* autoTranslate */ false);
     }
 
     // 속성 패널 상태
