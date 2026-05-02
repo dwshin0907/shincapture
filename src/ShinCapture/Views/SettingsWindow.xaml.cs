@@ -67,6 +67,7 @@ public partial class SettingsWindow : Window
         TxtHkFixedSize.Text = _settings.Hotkeys.FixedSizeCapture;
         TxtHkTextCapture.Text = _settings.Hotkeys.TextCapture;
         TxtHkTranslateCapture.Text = _settings.Hotkeys.TranslateCapture;
+        TxtHkSmartCutCapture.Text = _settings.Hotkeys.SmartCutCapture;
         ChkOverridePrintScreen.IsChecked = _settings.Hotkeys.OverridePrintScreen;
 
         // OCR 언어 드롭다운 채우기
@@ -161,6 +162,7 @@ public partial class SettingsWindow : Window
         _settings.Hotkeys.FixedSizeCapture = TxtHkFixedSize.Text;
         _settings.Hotkeys.TextCapture = TxtHkTextCapture.Text;
         _settings.Hotkeys.TranslateCapture = TxtHkTranslateCapture.Text;
+        _settings.Hotkeys.SmartCutCapture = TxtHkSmartCutCapture.Text;
         _settings.Hotkeys.OverridePrintScreen = ChkOverridePrintScreen.IsChecked == true;
 
         var ocrLangTag = (CmbOcrLanguage.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString();

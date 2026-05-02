@@ -89,6 +89,7 @@ public partial class MainWindow : Window
         _hotkeyManager.Register(_settings.Hotkeys.FixedSizeCapture, () => StartCapture(CaptureMode.FixedSize));
         _hotkeyManager.Register(_settings.Hotkeys.TextCapture, () => StartCapture(CaptureMode.Text));
         _hotkeyManager.Register(_settings.Hotkeys.TranslateCapture, () => StartCapture(CaptureMode.Translate));
+        _hotkeyManager.Register(_settings.Hotkeys.SmartCutCapture, () => StartCapture(CaptureMode.SmartCut));
     }
 
     private void StartCapture(CaptureMode mode)
@@ -118,6 +119,7 @@ public partial class MainWindow : Window
                 _settings.FixedSizes?.FirstOrDefault()?.Width  ?? 1280,
                 _settings.FixedSizes?.FirstOrDefault()?.Height ?? 720),
             CaptureMode.Text => new RegionCaptureMode(),  // 영역 드래그 재사용, OCR 분기는 HandleCaptureResult
+            CaptureMode.SmartCut => new ShinCapture.Capture.SmartCutCaptureMode(),
             _ => new RegionCaptureMode()
         };
 

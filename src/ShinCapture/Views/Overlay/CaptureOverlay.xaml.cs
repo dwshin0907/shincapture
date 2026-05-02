@@ -257,6 +257,15 @@ public partial class CaptureOverlay : Window
                 cropped = masked;
             }
         }
+        else if (_mode is ShinCapture.Capture.SmartCutCaptureMode sc)
+        {
+            var smart = sc.ApplyGrabCut(cropped);
+            if (!ReferenceEquals(smart, cropped))
+            {
+                cropped.Dispose();
+                cropped = smart;
+            }
+        }
 
         Result = new CaptureResult
         {
