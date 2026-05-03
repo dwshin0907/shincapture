@@ -7,7 +7,7 @@
 #define MyAppNameEn "ShinCapture"
 ; 버전은 로컬 기본값. CI 빌드에서는 ISCC /DMyAppVersion=x.y.z 로 덮어씀
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.2"
+  #define MyAppVersion "1.3.0"
 #endif
 #define MyAppPublisher "ShinCapture"
 #define MyAppURL "https://shincapture.com"
