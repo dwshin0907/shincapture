@@ -67,7 +67,9 @@ public partial class EditorWindow : Window
         Loaded += (_, _) =>
         {
             SizeWindowToImage();
+            UpdateLayout();
             Canvas.BackgroundImage = _sourceImage;
+            Canvas.FitToView();
         };
     }
 
@@ -127,13 +129,10 @@ public partial class EditorWindow : Window
         _commandStack.Clear();
         _activeTool?.Reset();
 
-        Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        // ScrollViewer viewport measure 강제 → setter의 Dispatcher(Loaded)가 호출되는 시점에
-        // viewport 사이즈가 새 윈도우 사이즈를 반영함. 이 한 줄이 빠지면 옛 viewport 기준으로
-        // fit zoom이 잘못 계산되어 화면에 안 보이거나 작은 zoom으로 표시됨.
-        CanvasScroller?.UpdateLayout();
+        Canvas.BackgroundImage = _sourceImage;
+        Canvas.FitToView();
         BuildHistory();
         UpdateStatus();
 
@@ -184,13 +183,10 @@ public partial class EditorWindow : Window
         if (_captureObjects.TryGetValue(image, out var saved))
             _objects.AddRange(saved);
 
-        Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        // ScrollViewer viewport measure 강제 → setter의 Dispatcher(Loaded)가 호출되는 시점에
-        // viewport 사이즈가 새 윈도우 사이즈를 반영함. 이 한 줄이 빠지면 옛 viewport 기준으로
-        // fit zoom이 잘못 계산되어 화면에 안 보이거나 작은 zoom으로 표시됨.
-        CanvasScroller?.UpdateLayout();
+        Canvas.BackgroundImage = _sourceImage;
+        Canvas.FitToView();
         BuildHistory();
         UpdateStatus();
     }
@@ -554,6 +550,7 @@ public partial class EditorWindow : Window
             {
                 _sourceImage = img;
                 Canvas.BackgroundImage = img;
+                Canvas.FitToView();
             }, _objects),
             "지우개" => new EraserTool(_objects) { Mode = _eraserMode },
             _ => null
