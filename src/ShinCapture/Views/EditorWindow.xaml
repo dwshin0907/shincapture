@@ -50,7 +50,8 @@
                           VerticalScrollBarVisibility="Auto"
                           Focusable="False"
                           PanningMode="Both">
-                <editor:EditorCanvas x:Name="Canvas" ClipToBounds="True" Focusable="True"/>
+                <editor:EditorCanvas x:Name="Canvas" ClipToBounds="True" Focusable="True"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </ScrollViewer>
 
             <!-- History Panel -->

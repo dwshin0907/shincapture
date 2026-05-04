@@ -66,11 +66,25 @@ public partial class EditorWindow : Window
         Closing += OnEditorClosing;
         Loaded += (_, _) =>
         {
+            UpdateLayout(); // chrome 측정 강제 (ActualWidth/CanvasScroller.ActualWidth 보장)
             SizeWindowToImage();
             UpdateLayout();
             Canvas.BackgroundImage = _sourceImage;
             Canvas.FitToView();
+            UpdateBannerVisibility();
         };
+
+        SizeChanged += (_, _) => UpdateBannerVisibility();
+    }
+
+    /// <summary>윈도우가 좁을 땐 광고 배너(200 dip)를 숨겨서 툴바가 세로로 wrap되지 않게 함.</summary>
+    private void UpdateBannerVisibility()
+    {
+        if (BannerArea == null) return;
+        // 1100 dip = XAML 디자인 사이즈. 그 이하에선 툴바 + 배너가 한 줄에 못 들어감.
+        BannerArea.Visibility = ActualWidth < 1100
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void SizeWindowToImage()
@@ -85,11 +99,16 @@ public partial class EditorWindow : Window
         double imgLogicalH = _sourceImage.PixelHeight / dpiScale;
 
         // chrome(툴바/속성바/상태바/히스토리 패널) 사이즈를 ScrollViewer 기준으로 계산.
-        // Canvas.ActualWidth/Height는 이전 이미지 zoom 상태에 따라 변하므로 부적절 → ScrollViewer가 viewport.
-        double chromeW = Width - (CanvasScroller?.ActualWidth ?? Canvas.ActualWidth);
-        double chromeH = Height - (CanvasScroller?.ActualHeight ?? Canvas.ActualHeight);
-        if (chromeW < 0 || chromeW > 400) chromeW = 160; // 히스토리 패널(140) + 보더 약간
-        if (chromeH < 0 || chromeH > 400) chromeH = 130; // 툴바+속성+상태바 추정
+        // Width property가 아닌 ActualWidth를 사용 — Width는 NaN(auto) 또는 set값으로 동기화 지연 가능.
+        // ActualWidth는 항상 측정값이라 안전.
+        double winW = ActualWidth > 0 ? ActualWidth : Width;
+        double winH = ActualHeight > 0 ? ActualHeight : Height;
+        double svW = CanvasScroller?.ActualWidth ?? 0;
+        double svH = CanvasScroller?.ActualHeight ?? 0;
+        double chromeW = winW - svW;
+        double chromeH = winH - svH;
+        if (svW <= 0 || chromeW < 0 || chromeW > 400) chromeW = 160; // 히스토리 패널(140) + 보더 약간
+        if (svH <= 0 || chromeH < 0 || chromeH > 400) chromeH = 130; // 툴바+속성+상태바 추정
 
         // 패딩 (상하좌우 20px)
         double padding = 40;
@@ -104,8 +123,15 @@ public partial class EditorWindow : Window
         double maxW = workArea.Width / dpiScale;
         double maxH = workArea.Height / dpiScale;
 
-        Width = Math.Min(desiredW, maxW);
-        Height = Math.Min(desiredH, maxH);
+        // 최소 보장 — 작은 캡쳐일 때 윈도우가 너무 좁으면 툴바(WrapPanel)가 세로로 wrap되어
+        // ScrollViewer 영역이 줄어들고 결과적으로 캡쳐가 안 보이는 문제 방지.
+        // 작업영역 50% 기준으로 minimum, 단 와이드/울트라와이드(3440w+)에서 윈도우가 과도하게
+        // 커지지 않도록 XAML 디자인 사이즈(1100x750)로 cap.
+        double minW = Math.Min(maxW * 0.5, 1100);
+        double minH = Math.Min(maxH * 0.5, 750);
+
+        Width = Math.Min(Math.Max(desiredW, minW), maxW);
+        Height = Math.Min(Math.Max(desiredH, minH), maxH);
 
         // 화면 중앙 배치
         Left = (maxW - Width) / 2 + workArea.Left / dpiScale;
@@ -129,6 +155,16 @@ public partial class EditorWindow : Window
         _commandStack.Clear();
         _activeTool?.Reset();
 
+        // Window가 Hidden이면 먼저 visible로. SizeWindowToImage의 chrome 측정과
+        // ScrollViewer ViewportWidth 갱신은 visible 상태에서만 정확.
+        // (Hidden 상태에서 ActualWidth는 0 또는 직전 값 → fit zoom 38% 같은 잘못된 값으로 계산됨.)
+        if (!IsVisible) Show();
+
+        // Show() 직후 layout pass가 동기 보장되지 않으므로 UpdateLayout()으로 측정 강제 →
+        // 그 후에야 SizeWindowToImage가 정확한 chrome(=ActualWidth-CanvasScroller.ActualWidth)으로
+        // 윈도우 사이즈를 결정함. 이 한 줄 없으면 chrome=160 fallback으로 윈도우가 작게 결정되고
+        // viewport가 좁아 fit zoom이 38%/42% 같은 작은 값이 나옴.
+        UpdateLayout();
         SizeWindowToImage();
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
@@ -183,6 +219,8 @@ public partial class EditorWindow : Window
         if (_captureObjects.TryGetValue(image, out var saved))
             _objects.AddRange(saved);
 
+        if (!IsVisible) Show();
+        UpdateLayout();
         SizeWindowToImage();
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
@@ -1455,6 +1493,15 @@ public partial class EditorWindow : Window
                 StatusText.Text = $"저장됨: {path}";
             };
             ctx.Items.Add(miQuickSave);
+
+            var miOpenFolder = new MenuItem { Header = "저장 폴더 열기" };
+            miOpenFolder.Click += (_, _) =>
+            {
+                var path = _settings.Save.AutoSavePath;
+                if (!System.IO.Directory.Exists(path)) System.IO.Directory.CreateDirectory(path);
+                System.Diagnostics.Process.Start("explorer.exe", path);
+            };
+            ctx.Items.Add(miOpenFolder);
 
             ctx.Items.Add(new Separator());
 
