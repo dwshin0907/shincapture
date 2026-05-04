@@ -82,9 +82,11 @@ public partial class EditorWindow : Window
     {
         if (BannerArea == null) return;
         // 1100 dip = XAML 디자인 사이즈. 그 이하에선 툴바 + 배너가 한 줄에 못 들어감.
-        BannerArea.Visibility = ActualWidth < 1100
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        // 큰 화면: toolbar 배너만 표시. 작은 화면: status bar의 compact 배너로 대체.
+        bool isWide = ActualWidth >= 1100;
+        BannerArea.Visibility = isWide ? Visibility.Visible : Visibility.Collapsed;
+        if (StatusBarBannerArea != null)
+            StatusBarBannerArea.Visibility = isWide ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SizeWindowToImage()
@@ -416,9 +418,6 @@ public partial class EditorWindow : Window
         // 스마트 컷 버튼 — GrabCut 객체 추출 (새 캡쳐)
         ToolbarPanel.Children.Add(CreateSmartCutActionButton());
 
-        // 배경 제거 버튼 — 현재 편집기 이미지에 GrabCut 적용 (새 캡쳐 X)
-        ToolbarPanel.Children.Add(CreateRemoveBackgroundButton());
-
         ToolbarPanel.Children.Add(CreateSeparator());
 
         var undoBtn = CreateToolButton("\u21A9", "실행취소 (Ctrl+Z)"); // ↩
@@ -555,6 +554,49 @@ public partial class EditorWindow : Window
             shadow.BlurRadius = 8;
         };
         BannerArea.Child = banner;
+
+        // Status bar용 compact banner — 작은 화면(toolbar 배너 hide)에서 API 키 발급법 버튼 우측에 배치.
+        // 세로는 status bar 버튼 사이즈에 맞춰 작게, 가로는 toolbar 배너보다 길게.
+        var statusBanner = new Border
+        {
+            Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50),
+            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 4, 12, 4),
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
+        };
+        var statusText = new TextBlock
+        {
+            Text = "📚 ChatGPT도 모르는 AI실전활용법 →",
+            FontSize = 11,
+            FontWeight = FontWeights.Bold,
+            Foreground = System.Windows.Media.Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            Width = 280
+        };
+        statusBanner.Child = statusText;
+        statusBanner.MouseDown += (_, _) =>
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://contents.premium.naver.com/market/ai",
+                UseShellExecute = true
+            });
+        };
+        statusBanner.MouseEnter += (_, _) =>
+        {
+            statusBanner.Background = MakeBg(0x05, 0xDB, 0x66, 0x03, 0xBE, 0x57);
+        };
+        statusBanner.MouseLeave += (_, _) =>
+        {
+            statusBanner.Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50);
+        };
+        StatusBarBannerArea.Child = statusBanner;
     }
 
     private void SelectTool(string name)
@@ -784,54 +826,6 @@ public partial class EditorWindow : Window
     private void RequestSmartCutCapture()
     {
         CaptureRequested?.Invoke(Models.CaptureMode.SmartCut, /* autoTranslate */ false);
-    }
-
-    private Button CreateRemoveBackgroundButton()
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock
-        {
-            Text = "🪄",
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 3, 0)
-        });
-        sp.Children.Add(new TextBlock
-        {
-            Text = "배경 제거",
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var btn = new Button
-        {
-            Content = sp,
-            Padding = new Thickness(9, 0, 9, 0),
-            Margin = new Thickness(2, 1, 2, 1),
-            Height = 22,
-            Style = (Style)FindResource("AccentButton"),
-            ToolTip = "현재 캡쳐 이미지에 GrabCut 적용 — 가장자리=배경 가정 (객체 주변 여유 있을 때 효과적)"
-        };
-        btn.Click += (_, _) => RunRemoveBackground();
-        return btn;
-    }
-
-    private void RunRemoveBackground()
-    {
-        if (_sourceBitmap == null) return;
-        StatusText.Text = "배경 제거 중...";
-        try
-        {
-            var result = Capture.GrabCutHelper.RemoveBackground(_sourceBitmap);
-            // 결과를 새 history 항목으로 추가 + 현재 화면에 로드 (원본 보존)
-            LoadNewCapture(result);
-            StatusText.Text = "배경 제거 완료 — 결과는 새 항목으로 추가됨";
-        }
-        catch (System.Exception ex)
-        {
-            StatusText.Text = $"배경 제거 실패: {ex.Message}";
-        }
     }
 
     // 속성 패널 상태

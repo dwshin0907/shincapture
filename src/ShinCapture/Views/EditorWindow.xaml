@@ -256,6 +256,9 @@
                         Click="OnApiKeyHelpClick"
                         ToolTip="OpenAI API 키 발급 + 설정 가이드"
                         DockPanel.Dock="Left"/>
+                <Border x:Name="StatusBarBannerArea" DockPanel.Dock="Left"
+                        Margin="10,0,0,0" VerticalAlignment="Center"
+                        Visibility="Collapsed"/>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="⚙&#xFE0E; 설정" Margin="0,0,4,0"
                             Style="{DynamicResource SubtleButton}" Padding="12,5" Click="OnEditorSettingsClick"/>
