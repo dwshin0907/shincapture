@@ -82,11 +82,12 @@ public partial class EditorWindow : Window
         double imgLogicalW = _sourceImage.PixelWidth / dpiScale;
         double imgLogicalH = _sourceImage.PixelHeight / dpiScale;
 
-        // 툴바+속성+상태바 높이 추정 (창 크기 - 캔버스 크기)
-        double chromeW = Width - Canvas.ActualWidth;
-        double chromeH = Height - Canvas.ActualHeight;
-        if (chromeW < 0) chromeW = 0;
-        if (chromeH < 0) chromeH = 80;
+        // chrome(툴바/속성바/상태바/히스토리 패널) 사이즈를 ScrollViewer 기준으로 계산.
+        // Canvas.ActualWidth/Height는 이전 이미지 zoom 상태에 따라 변하므로 부적절 → ScrollViewer가 viewport.
+        double chromeW = Width - (CanvasScroller?.ActualWidth ?? Canvas.ActualWidth);
+        double chromeH = Height - (CanvasScroller?.ActualHeight ?? Canvas.ActualHeight);
+        if (chromeW < 0 || chromeW > 400) chromeW = 160; // 히스토리 패널(140) + 보더 약간
+        if (chromeH < 0 || chromeH > 400) chromeH = 130; // 툴바+속성+상태바 추정
 
         // 패딩 (상하좌우 20px)
         double padding = 40;
@@ -129,7 +130,7 @@ public partial class EditorWindow : Window
         Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        Canvas.FitToView();
+        // FitToView는 BackgroundImage setter의 Dispatcher가 layout 후 호출 — 여기서 직접 호출 X
         BuildHistory();
         UpdateStatus();
 
@@ -183,7 +184,7 @@ public partial class EditorWindow : Window
         Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        Canvas.FitToView();
+        // FitToView는 BackgroundImage setter의 Dispatcher가 layout 후 호출 — 여기서 직접 호출 X
         BuildHistory();
         UpdateStatus();
     }

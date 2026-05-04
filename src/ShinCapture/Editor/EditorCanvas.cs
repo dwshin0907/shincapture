@@ -50,9 +50,9 @@ public class EditorCanvas : Canvas
         {
             _backgroundImage = value;
             // ScrollViewer viewport가 새 윈도우 사이즈에 맞춰 갱신될 시간을 주기 위해
-            // Dispatcher Loaded 우선순위로 FitToView 호출
+            // ContextIdle(가장 늦은 priority — 모든 layout pass 완료 후)로 FitToView 호출
             Dispatcher.BeginInvoke(new Action(FitToView),
-                System.Windows.Threading.DispatcherPriority.Loaded);
+                System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
     }
 

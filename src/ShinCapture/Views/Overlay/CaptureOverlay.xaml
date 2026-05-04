@@ -61,23 +61,23 @@
                        Stretch="Fill"
                        RenderOptions.BitmapScalingMode="NearestNeighbor" />
 
-                <!-- Magnifier crosshair center mark — 검정 외곽으로 가시성 확보 -->
-                <Canvas Grid.Row="0" IsHitTestVisible="False">
-                    <Line Canvas.Left="0" Canvas.Top="100"
-                          X1="90" Y1="0" X2="110" Y2="0"
-                          Stroke="#FFFFFFFF" StrokeThickness="1.5">
-                        <Line.Effect>
+                <!-- Magnifier crosshair — 이미지 영역 가득 채우는 십자가 (검정 외곽으로 가시성) -->
+                <Grid Grid.Row="0" IsHitTestVisible="False">
+                    <!-- 가로선 -->
+                    <Border Height="1.5" Background="White"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                        <Border.Effect>
                             <DropShadowEffect Color="Black" BlurRadius="2" ShadowDepth="0" Opacity="1"/>
-                        </Line.Effect>
-                    </Line>
-                    <Line Canvas.Left="100" Canvas.Top="0"
-                          X1="0" Y1="90" X2="0" Y2="110"
-                          Stroke="#FFFFFFFF" StrokeThickness="1.5">
-                        <Line.Effect>
+                        </Border.Effect>
+                    </Border>
+                    <!-- 세로선 -->
+                    <Border Width="1.5" Background="White"
+                            HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                        <Border.Effect>
                             <DropShadowEffect Color="Black" BlurRadius="2" ShadowDepth="0" Opacity="1"/>
-                        </Line.Effect>
-                    </Line>
-                </Canvas>
+                        </Border.Effect>
+                    </Border>
+                </Grid>
 
                 <!-- Info panel -->
                 <StackPanel Grid.Row="1"
