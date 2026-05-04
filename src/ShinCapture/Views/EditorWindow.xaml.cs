@@ -413,8 +413,11 @@ public partial class EditorWindow : Window
         // 번역 버튼 — OCR 버튼 바로 오른쪽
         ToolbarPanel.Children.Add(CreateTranslateActionButton());
 
-        // 스마트 컷 버튼 — GrabCut 객체 추출
+        // 스마트 컷 버튼 — GrabCut 객체 추출 (새 캡쳐)
         ToolbarPanel.Children.Add(CreateSmartCutActionButton());
+
+        // 배경 제거 버튼 — 현재 편집기 이미지에 GrabCut 적용 (새 캡쳐 X)
+        ToolbarPanel.Children.Add(CreateRemoveBackgroundButton());
 
         ToolbarPanel.Children.Add(CreateSeparator());
 
@@ -781,6 +784,54 @@ public partial class EditorWindow : Window
     private void RequestSmartCutCapture()
     {
         CaptureRequested?.Invoke(Models.CaptureMode.SmartCut, /* autoTranslate */ false);
+    }
+
+    private Button CreateRemoveBackgroundButton()
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock
+        {
+            Text = "🪄",
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 3, 0)
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = "배경 제거",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btn = new Button
+        {
+            Content = sp,
+            Padding = new Thickness(9, 0, 9, 0),
+            Margin = new Thickness(2, 1, 2, 1),
+            Height = 22,
+            Style = (Style)FindResource("AccentButton"),
+            ToolTip = "현재 캡쳐 이미지에 GrabCut 적용 — 가장자리=배경 가정 (객체 주변 여유 있을 때 효과적)"
+        };
+        btn.Click += (_, _) => RunRemoveBackground();
+        return btn;
+    }
+
+    private void RunRemoveBackground()
+    {
+        if (_sourceBitmap == null) return;
+        StatusText.Text = "배경 제거 중...";
+        try
+        {
+            var result = Capture.GrabCutHelper.RemoveBackground(_sourceBitmap);
+            // 결과를 새 history 항목으로 추가 + 현재 화면에 로드 (원본 보존)
+            LoadNewCapture(result);
+            StatusText.Text = "배경 제거 완료 — 결과는 새 항목으로 추가됨";
+        }
+        catch (System.Exception ex)
+        {
+            StatusText.Text = $"배경 제거 실패: {ex.Message}";
+        }
     }
 
     // 속성 패널 상태
