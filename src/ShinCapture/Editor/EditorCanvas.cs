@@ -46,7 +46,14 @@ public class EditorCanvas : Canvas
     public BitmapSource? BackgroundImage
     {
         get => _backgroundImage;
-        set { _backgroundImage = value; FitToView(); }
+        set
+        {
+            _backgroundImage = value;
+            // ScrollViewer viewport가 새 윈도우 사이즈에 맞춰 갱신될 시간을 주기 위해
+            // Dispatcher Loaded 우선순위로 FitToView 호출
+            Dispatcher.BeginInvoke(new Action(FitToView),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
     }
 
     public List<EditorObject> Objects { get => _objects; set => _objects = value; }
