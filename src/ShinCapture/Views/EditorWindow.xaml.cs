@@ -130,7 +130,10 @@ public partial class EditorWindow : Window
         Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        // FitToView는 BackgroundImage setter의 Dispatcher가 layout 후 호출 — 여기서 직접 호출 X
+        // ScrollViewer viewport measure 강제 → setter의 Dispatcher(Loaded)가 호출되는 시점에
+        // viewport 사이즈가 새 윈도우 사이즈를 반영함. 이 한 줄이 빠지면 옛 viewport 기준으로
+        // fit zoom이 잘못 계산되어 화면에 안 보이거나 작은 zoom으로 표시됨.
+        CanvasScroller?.UpdateLayout();
         BuildHistory();
         UpdateStatus();
 
@@ -184,7 +187,10 @@ public partial class EditorWindow : Window
         Canvas.BackgroundImage = _sourceImage;
         SizeWindowToImage();
         UpdateLayout();
-        // FitToView는 BackgroundImage setter의 Dispatcher가 layout 후 호출 — 여기서 직접 호출 X
+        // ScrollViewer viewport measure 강제 → setter의 Dispatcher(Loaded)가 호출되는 시점에
+        // viewport 사이즈가 새 윈도우 사이즈를 반영함. 이 한 줄이 빠지면 옛 viewport 기준으로
+        // fit zoom이 잘못 계산되어 화면에 안 보이거나 작은 zoom으로 표시됨.
+        CanvasScroller?.UpdateLayout();
         BuildHistory();
         UpdateStatus();
     }
