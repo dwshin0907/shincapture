@@ -24,6 +24,7 @@ public partial class EditorWindow : Window
     private readonly SaveManager _saveManager;
     private readonly AppSettings _settings;
     private readonly SettingsManager? _settingsManager;
+    private readonly EditorOcrService _ocrService = new();
     private BitmapSource _sourceImage;
     private Bitmap _sourceBitmap;
     private ITool? _activeTool;
@@ -70,7 +71,7 @@ public partial class EditorWindow : Window
             SizeWindowToImage();
             UpdateLayout();
             Canvas.BackgroundImage = _sourceImage;
-            Canvas.FitToView();
+            Canvas.ApplyInitialZoom();
             UpdateBannerVisibility();
         };
 
@@ -170,7 +171,7 @@ public partial class EditorWindow : Window
         SizeWindowToImage();
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
-        Canvas.FitToView();
+        Canvas.ApplyInitialZoom();
         BuildHistory();
         UpdateStatus();
 
@@ -226,7 +227,7 @@ public partial class EditorWindow : Window
         SizeWindowToImage();
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
-        Canvas.FitToView();
+        Canvas.ApplyInitialZoom();
         BuildHistory();
         UpdateStatus();
     }
@@ -633,7 +634,7 @@ public partial class EditorWindow : Window
             {
                 _sourceImage = img;
                 Canvas.BackgroundImage = img;
-                Canvas.FitToView();
+                Canvas.ApplyInitialZoom();
             }, _objects),
             "지우개" => new EraserTool(_objects) { Mode = _eraserMode },
             _ => null
@@ -1837,8 +1838,7 @@ public partial class EditorWindow : Window
     private void RefreshOcrBanner()
     {
         if (OcrApiKeyBanner == null) return;
-        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
-        OcrApiKeyBanner.Visibility = store.HasKey() ? Visibility.Collapsed : Visibility.Visible;
+        OcrApiKeyBanner.Visibility = _ocrService.HasApiKey() ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnApiKeyBannerClick(object sender, MouseButtonEventArgs e)
@@ -1897,8 +1897,8 @@ public partial class EditorWindow : Window
 
         try
         {
-            var langTag = ShinCapture.Services.OcrService.ResolveLanguageOrFallback(currentSettings.Ocr.Language);
-            if (langTag == null)
+            var result = await _ocrService.ExtractAsync(_sourceImage, currentSettings);
+            if (result.Outcome == EditorOcrOutcome.LanguagePackMissing)
             {
                 OcrPanelTitle.Text = "🔤 텍스트 추출";
                 OcrPanelMeta.Text = "OCR 언어팩 필요";
@@ -1910,11 +1910,7 @@ public partial class EditorWindow : Window
                 return;
             }
 
-            using var bmp = BitmapSourceToBitmap(_sourceImage);
-            var text = await ShinCapture.Services.OcrService.ExtractTextAsync(
-                bmp, langTag, currentSettings.Ocr.UpscaleSmallImages);
-
-            if (string.IsNullOrWhiteSpace(text))
+            if (result.Outcome == EditorOcrOutcome.NoText)
             {
                 OcrPanelMeta.Text = "(텍스트 없음)";
                 OcrTextBox.Text = "";
@@ -1923,12 +1919,22 @@ public partial class EditorWindow : Window
                 return;
             }
 
+            if (result.Outcome == EditorOcrOutcome.Failed)
+            {
+                OcrPanelTitle.Text = "🔤 텍스트 추출";
+                OcrPanelMeta.Text = "실패";
+                OcrTextBox.Text = result.ErrorMessage ?? "";
+                SetStatus("OCR 실패");
+                _pendingAutoTranslate = false;
+                return;
+            }
+
+            var text = result.Text;
             OcrTextBox.Text = text;
-            var fallbackNote = string.Equals(langTag, currentSettings.Ocr.Language, StringComparison.OrdinalIgnoreCase)
-                ? "" : $" (폴백)";
+            var fallbackNote = result.UsedFallback ? " (폴백)" : "";
             OcrPanelTitle.Text = "🔤 텍스트 추출";
             OcrPanelMeta.Text = $"{text.Length}자";
-            OcrSourceLangLabel.Text = langTag + fallbackNote;
+            OcrSourceLangLabel.Text = result.LanguageTag + fallbackNote;
             SetStatus($"OCR 완료 ({text.Length}자)");
 
             // 대상 언어 드롭다운 자동 선택: OCR 결과가 한국어면 영어, 그 외면 한국어
@@ -1959,16 +1965,6 @@ public partial class EditorWindow : Window
             SetStatus("OCR 실패");
             _pendingAutoTranslate = false;
         }
-    }
-
-    private static System.Drawing.Bitmap BitmapSourceToBitmap(System.Windows.Media.Imaging.BitmapSource source)
-    {
-        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(source));
-        using var ms = new System.IO.MemoryStream();
-        encoder.Save(ms);
-        ms.Position = 0;
-        return new System.Drawing.Bitmap(ms);
     }
 
     private void OnOcrClose(object sender, RoutedEventArgs e)
@@ -2044,8 +2040,7 @@ public partial class EditorWindow : Window
             return;
         }
 
-        var store = new ShinCapture.Services.Ai.DpapiCredentialStore();
-        if (!store.HasKey())
+        if (!_ocrService.HasApiKey())
         {
             SetStatus("번역: AI 키가 필요합니다 (설정 > AI)");
             return;
@@ -2061,23 +2056,26 @@ public partial class EditorWindow : Window
         OcrTargetLangLabel.Text = targetLang;
         SetStatus("번역 실행 중…");
 
-        var openAi = ShinCapture.Services.Ai.OpenAiClient.CreateDefault(settings.Ai.TimeoutSeconds);
-        var svc = new ShinCapture.Services.Ai.TranslationService(store, openAi);
-
         try
         {
-            var r = await svc.TranslateAsync(text, targetLang, settings.Ai.Model);
+            var r = await _ocrService.TranslateAsync(text, settings, targetLang);
             switch (r.Outcome)
             {
-                case ShinCapture.Services.Ai.TranslationOutcome.Success:
+                case EditorTranslationOutcome.Success:
                     OcrTranslatedBox.Text = r.TranslatedText;
                     OcrTargetLangLabel.Text = targetLang;
                     SetStatus($"번역 완료 ({r.TranslatedText.Length}자, {targetLang})");
                     break;
-                case ShinCapture.Services.Ai.TranslationOutcome.SkippedSameLanguage:
+                case EditorTranslationOutcome.SkippedSameLanguage:
                     OcrTranslatedBox.Text = r.OriginalText;
                     OcrTargetLangLabel.Text = $"{targetLang} (동일)";
                     SetStatus($"이미 {targetLang}입니다");
+                    break;
+                case EditorTranslationOutcome.Disabled:
+                    SetStatus("번역: 설정 > AI 탭에서 활성화 필요");
+                    break;
+                case EditorTranslationOutcome.NoKey:
+                    SetStatus("번역: AI 키가 필요합니다 (설정 > AI)");
                     break;
                 default:
                     OcrTranslatedBox.Text = "(번역 결과 없음)";

@@ -80,7 +80,7 @@ public class EditorCanvas : Canvas
         Height = _backgroundImage.PixelHeight * _zoom + Padding * 2;
     }
 
-    public void FitToView()
+    public void ApplyInitialZoom()
     {
         if (_backgroundImage == null) return;
 
@@ -90,24 +90,13 @@ public class EditorCanvas : Canvas
         var sv = GetScrollViewer();
         double viewW = sv?.ViewportWidth ?? ActualWidth;
         double viewH = sv?.ViewportHeight ?? ActualHeight;
-        if (viewW <= 0 || viewH <= 0)
-        {
-            // 아직 레이아웃 전 — 기본 100%
-            _zoom = 1.0 / dpiScale;
-            UpdateCanvasSize();
-            InvalidateVisual();
-            ZoomChanged?.Invoke(this, _zoom * dpiScale);
-            return;
-        }
-
-        // 뷰포트에 맞는 줌 계산
-        double zoomW = (viewW - Padding * 2) / _backgroundImage.PixelWidth;
-        double zoomH = (viewH - Padding * 2) / _backgroundImage.PixelHeight;
-        double fitZoom = Math.Min(zoomW, zoomH);
-
-        // 100% 이하로만 축소 (100%보다 작은 이미지는 100%로)
-        double zoom100 = 1.0 / dpiScale;
-        _zoom = Math.Min(fitZoom, zoom100);
+        _zoom = EditorZoomPolicy.CalculateInitialZoom(
+            _backgroundImage.PixelWidth,
+            _backgroundImage.PixelHeight,
+            viewW,
+            viewH,
+            Padding,
+            dpiScale);
 
         UpdateCanvasSize();
         InvalidateVisual();
