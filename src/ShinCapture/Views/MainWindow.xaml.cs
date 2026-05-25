@@ -29,7 +29,6 @@ public partial class MainWindow : Window
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
         _settingsManager.SettingsChanged += OnExternalSettingsChanged;
-        _hotkeyManager.DisplayChanged += OnDisplayChanged;
 
         Icon? trayIcon = null;
         try
@@ -513,18 +512,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnDisplayChanged(object? sender, EventArgs e)
-    {
-        Capture.FixedSizeCaptureMode.ResetSavedPosition();
-        RegisterHotkeys();
-        _editorWindow?.RefreshForDisplayChange();
-        _trayIcon.ShowBalloonTip(3000, "신캡쳐",
-            "디스플레이 변경 감지 — 캡쳐 설정을 새로고침했습니다",
-            System.Windows.Forms.ToolTipIcon.Info);
-    }
-
     private void OnExternalSettingsChanged(object? sender, EventArgs e)
     {
+        // SettingsManager.Save() raises this event after persisting to disk.
+        // Marshal to UI thread (event source thread is whoever called Save).
         Dispatcher.Invoke(() =>
         {
             _settings = _settingsManager.Load();

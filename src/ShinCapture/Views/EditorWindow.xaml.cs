@@ -257,16 +257,6 @@ public partial class EditorWindow : Window
         Close();
     }
 
-    /// <summary>디스플레이 구성 변경 시 DPI·화면 크기 재계산</summary>
-    public void RefreshForDisplayChange()
-    {
-        if (!IsVisible) return;
-        UpdateLayout();
-        SizeWindowToImage();
-        Canvas.ApplyInitialZoom();
-        StatusText.Text = "디스플레이 변경 감지 — 새로고침 완료";
-    }
-
     private void OnEditorKeyDown(object sender, KeyEventArgs e)
     {
         bool inTextBox = e.OriginalSource is TextBox tb && tb.IsFocused && tb.Text?.Length > 0;

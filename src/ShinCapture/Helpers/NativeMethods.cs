@@ -18,7 +18,6 @@ internal static class NativeMethods
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_NOREPEAT = 0x4000;
     public const int WM_HOTKEY = 0x0312;
-    public const int WM_DISPLAYCHANGE = 0x007E;
 
     // --- Screen Capture ---
     [DllImport("user32.dll")]
@@ -110,9 +109,6 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool SetProcessDPIAware();
-
-    [DllImport("user32.dll")]
-    public static extern uint GetDpiForSystem();
 
     // --- Structs ---
     [StructLayout(LayoutKind.Sequential)]
