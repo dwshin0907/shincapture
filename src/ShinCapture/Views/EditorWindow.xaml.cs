@@ -257,6 +257,16 @@ public partial class EditorWindow : Window
         Close();
     }
 
+    /// <summary>디스플레이 구성 변경 시 DPI·화면 크기 재계산</summary>
+    public void RefreshForDisplayChange()
+    {
+        if (!IsVisible) return;
+        UpdateLayout();
+        SizeWindowToImage();
+        Canvas.ApplyInitialZoom();
+        StatusText.Text = "디스플레이 변경 감지 — 새로고침 완료";
+    }
+
     private void OnEditorKeyDown(object sender, KeyEventArgs e)
     {
         bool inTextBox = e.OriginalSource is TextBox tb && tb.IsFocused && tb.Text?.Length > 0;
@@ -1531,14 +1541,27 @@ public partial class EditorWindow : Window
             ctx.Items.Add(miSave);
 
             var miQuickSave = new MenuItem { Header = "빠른 저장 (자동경로)" };
+            var miCopyPath = new MenuItem { Header = "저장경로 복사", IsEnabled = false };
             miQuickSave.Click += (_, _) =>
             {
                 var bmp = BitmapHelper.ToBitmap(localImg);
                 var path = _saveManager.SaveAuto(bmp, _settings);
                 bmp.Dispose();
                 StatusText.Text = $"저장됨: {path}";
+                miCopyPath.IsEnabled = true;
+                miCopyPath.Tag = path;
             };
             ctx.Items.Add(miQuickSave);
+
+            miCopyPath.Click += (_, _) =>
+            {
+                if (miCopyPath.Tag is string p)
+                {
+                    System.Windows.Clipboard.SetText(p);
+                    StatusText.Text = $"경로 복사됨: {p}";
+                }
+            };
+            ctx.Items.Add(miCopyPath);
 
             var miOpenFolder = new MenuItem { Header = "저장 폴더 열기" };
             miOpenFolder.Click += (_, _) =>

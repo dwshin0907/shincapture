@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
+using Microsoft.Win32;
 using ShinCapture.Helpers;
 
 namespace ShinCapture.Services;
@@ -14,6 +16,9 @@ public class HotkeyManager : IDisposable
     private HwndSource? _source;
     private readonly Dictionary<int, Action> _hotkeyActions = new();
     private int _nextId = 1;
+    private DispatcherTimer? _displayChangeDebounce;
+
+    public event EventHandler? DisplayChanged;
 
     public void Initialize(Window window)
     {
@@ -21,6 +26,7 @@ public class HotkeyManager : IDisposable
         _hwnd = helper.EnsureHandle();
         _source = HwndSource.FromHwnd(_hwnd);
         _source?.AddHook(WndProc);
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
 
     public int Register(string hotkeyString, Action action)
@@ -49,6 +55,29 @@ public class HotkeyManager : IDisposable
     {
         foreach (var id in _hotkeyActions.Keys.ToList())
             Unregister(id);
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted)
+            return;
+        dispatcher.BeginInvoke(DebounceDisplayChanged);
+    }
+
+    private void DebounceDisplayChanged()
+    {
+        if (_displayChangeDebounce == null)
+        {
+            _displayChangeDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _displayChangeDebounce.Tick += (_, _) =>
+            {
+                _displayChangeDebounce.Stop();
+                DisplayChanged?.Invoke(this, EventArgs.Empty);
+            };
+        }
+        _displayChangeDebounce.Stop();
+        _displayChangeDebounce.Start();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -83,14 +112,12 @@ public class HotkeyManager : IDisposable
                 case "printscreen":
                     vk = (uint)KeyInterop.VirtualKeyFromKey(Key.PrintScreen); break;
                 default:
-                    // 단일 숫자: "1" → Key.D1, "0" → Key.D0 (WPF Key enum is D-prefixed)
                     if (part.Length == 1 && part[0] >= '0' && part[0] <= '9')
                     {
                         if (Enum.TryParse<Key>("D" + part, true, out var digitKey))
                             vk = (uint)KeyInterop.VirtualKeyFromKey(digitKey);
                         break;
                     }
-                    // F-keys, alphabet, 등은 그대로 동작
                     if (Enum.TryParse<Key>(part, true, out var key))
                         vk = (uint)KeyInterop.VirtualKeyFromKey(key);
                     break;
@@ -100,6 +127,8 @@ public class HotkeyManager : IDisposable
 
     public void Dispose()
     {
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _displayChangeDebounce?.Stop();
         UnregisterAll();
         _source?.RemoveHook(WndProc);
     }

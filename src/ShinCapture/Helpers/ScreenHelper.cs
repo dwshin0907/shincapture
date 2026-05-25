@@ -1,21 +1,32 @@
 using System;
 using System.Drawing;
-using System.Linq;
 
 namespace ShinCapture.Helpers;
 
 public static class ScreenHelper
 {
-    /// <summary>전체 가상 화면의 물리 픽셀 영역</summary>
+    /// <summary>전체 가상 화면의 물리 픽셀 영역 (캐시 없이 OS에서 직접 조회)</summary>
     public static Rectangle GetPhysicalScreenBounds()
     {
-        // WinForms Screen.Bounds는 System DPI aware 프로세스에서 물리 픽셀 반환
-        var allScreens = System.Windows.Forms.Screen.AllScreens;
-        int left = allScreens.Min(s => s.Bounds.Left);
-        int top = allScreens.Min(s => s.Bounds.Top);
-        int right = allScreens.Max(s => s.Bounds.Right);
-        int bottom = allScreens.Max(s => s.Bounds.Bottom);
-        return new Rectangle(left, top, right - left, bottom - top);
+        int left = NativeMethods.GetSystemMetrics(NativeMethods.SM_XVIRTUALSCREEN);
+        int top = NativeMethods.GetSystemMetrics(NativeMethods.SM_YVIRTUALSCREEN);
+        int width = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXVIRTUALSCREEN);
+        int height = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYVIRTUALSCREEN);
+        return new Rectangle(left, top, width, height);
+    }
+
+    /// <summary>시스템 DPI 스케일 (세션 동안 고정값, 캐시 안전)</summary>
+    public static double GetSystemDpiScale()
+    {
+        return NativeMethods.GetDpiForSystem() / 96.0;
+    }
+
+    /// <summary>가상 화면을 WPF DIP 좌표로 반환 (SystemParameters 캐시 우회)</summary>
+    public static (double Left, double Top, double Width, double Height) GetVirtualScreenDip()
+    {
+        var bounds = GetPhysicalScreenBounds();
+        double scale = GetSystemDpiScale();
+        return (bounds.X / scale, bounds.Y / scale, bounds.Width / scale, bounds.Height / scale);
     }
 
     public static Bitmap CaptureFullScreen()

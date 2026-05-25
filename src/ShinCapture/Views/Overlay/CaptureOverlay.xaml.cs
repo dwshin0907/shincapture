@@ -45,16 +45,13 @@ public partial class CaptureOverlay : Window
         // 1. Capture the full virtual screen
         _screenBitmap = ScreenHelper.CaptureFullScreen();
 
-        // 2. Position the overlay to cover all monitors
-        var vl = SystemParameters.VirtualScreenLeft;
-        var vt = SystemParameters.VirtualScreenTop;
-        var vw = SystemParameters.VirtualScreenWidth;
-        var vh = SystemParameters.VirtualScreenHeight;
-
-        Left = vl;
-        Top = vt;
-        Width = vw;
-        Height = vh;
+        // 2. Position the overlay to cover all monitors (GetSystemMetrics 직접 조회, SystemParameters 캐시 우회)
+        var physBounds = ScreenHelper.GetPhysicalScreenBounds();
+        var vs = ScreenHelper.GetVirtualScreenDip();
+        Left = vs.Left;
+        Top = vs.Top;
+        Width = vs.Width;
+        Height = vs.Height;
 
         // 3. Show the frozen screen
         ScreenImage.Source = BitmapHelper.ToBitmapSource(_screenBitmap);
@@ -67,6 +64,14 @@ public partial class CaptureOverlay : Window
         // 5. Initialize mode (after layout so ActualWidth/Height are valid)
         Dispatcher.InvokeAsync(() =>
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CaptureOverlay] phys=({physBounds.X},{physBounds.Y},{physBounds.Width},{physBounds.Height}) " +
+                $"dip=({vs.Left:F1},{vs.Top:F1},{vs.Width:F1},{vs.Height:F1}) " +
+                $"bitmap={_screenBitmap?.Width}x{_screenBitmap?.Height} " +
+                $"actual={ActualWidth:F1}x{ActualHeight:F1} " +
+                $"sysDpi={ScreenHelper.GetSystemDpiScale():F2} " +
+                $"winDpi={System.Windows.Media.VisualTreeHelper.GetDpi(this).PixelsPerDip:F2}");
+
             _mode.Initialize(_screenBitmap, RootGrid);
 
             // FullscreenCaptureMode is immediately complete

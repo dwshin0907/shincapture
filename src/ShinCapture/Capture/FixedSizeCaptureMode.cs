@@ -35,6 +35,8 @@ public class FixedSizeCaptureMode : ICaptureMode
     private static int _savedW, _savedH;
     private static bool _hasSaved;
 
+    public static void ResetSavedPosition() => _hasSaved = false;
+
     public bool IsComplete { get; private set; }
     public bool IsCancelled { get; private set; }
 
