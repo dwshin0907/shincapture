@@ -74,22 +74,33 @@ public partial class MainWindow : Window
         // 설정에 따라 Windows의 PrtSc → Snipping Tool 바인딩을 해제/복원
         PrintScreenOverrideService.Apply(_settings.Hotkeys.OverridePrintScreen);
 
-        // PrintScreen 등록
-        int psResult = _hotkeyManager.Register(_settings.Hotkeys.RegionCapture, () => StartCapture(CaptureMode.Region));
+        // 단축키 등록 — 실패(다른 앱 선점)는 라벨과 함께 모아 끝에서 한 번 알린다.
+        var failures = new System.Collections.Generic.List<string>();
+        void Reg(string label, string hotkey, CaptureMode mode)
+        {
+            if (string.IsNullOrWhiteSpace(hotkey)) return;
+            if (_hotkeyManager.Register(hotkey, () => StartCapture(mode)) < 0)
+                failures.Add($"{label}({hotkey})");
+        }
 
-        // 보조 핫키: PrintScreen이 안 되는 키보드(로지텍 등) 대응 + 사용자 커스터마이징 가능
-        if (!string.IsNullOrWhiteSpace(_settings.Hotkeys.RegionCaptureAlt))
-            _hotkeyManager.Register(_settings.Hotkeys.RegionCaptureAlt, () => StartCapture(CaptureMode.Region));
+        Reg("영역지정", _settings.Hotkeys.RegionCapture, CaptureMode.Region);
+        Reg("영역지정(보조)", _settings.Hotkeys.RegionCaptureAlt, CaptureMode.Region);
+        Reg("자유형", _settings.Hotkeys.FreeformCapture, CaptureMode.Freeform);
+        Reg("창 캡쳐", _settings.Hotkeys.WindowCapture, CaptureMode.Window);
+        Reg("단위영역", _settings.Hotkeys.ElementCapture, CaptureMode.Element);
+        Reg("전체화면", _settings.Hotkeys.FullscreenCapture, CaptureMode.Fullscreen);
+        Reg("스크롤", _settings.Hotkeys.ScrollCapture, CaptureMode.Scroll);
+        Reg("지정사이즈", _settings.Hotkeys.FixedSizeCapture, CaptureMode.FixedSize);
+        Reg("텍스트 캡쳐", _settings.Hotkeys.TextCapture, CaptureMode.Text);
+        Reg("텍스트+번역", _settings.Hotkeys.TranslateCapture, CaptureMode.Translate);
+        Reg("스마트 컷", _settings.Hotkeys.SmartCutCapture, CaptureMode.SmartCut);
 
-        _hotkeyManager.Register(_settings.Hotkeys.FreeformCapture, () => StartCapture(CaptureMode.Freeform));
-        _hotkeyManager.Register(_settings.Hotkeys.WindowCapture, () => StartCapture(CaptureMode.Window));
-        _hotkeyManager.Register(_settings.Hotkeys.ElementCapture, () => StartCapture(CaptureMode.Element));
-        _hotkeyManager.Register(_settings.Hotkeys.FullscreenCapture, () => StartCapture(CaptureMode.Fullscreen));
-        _hotkeyManager.Register(_settings.Hotkeys.ScrollCapture, () => StartCapture(CaptureMode.Scroll));
-        _hotkeyManager.Register(_settings.Hotkeys.FixedSizeCapture, () => StartCapture(CaptureMode.FixedSize));
-        _hotkeyManager.Register(_settings.Hotkeys.TextCapture, () => StartCapture(CaptureMode.Text));
-        _hotkeyManager.Register(_settings.Hotkeys.TranslateCapture, () => StartCapture(CaptureMode.Translate));
-        _hotkeyManager.Register(_settings.Hotkeys.SmartCutCapture, () => StartCapture(CaptureMode.SmartCut));
+        if (failures.Count > 0)
+        {
+            _trayIcon.ShowBalloonTip(5000, "신캡쳐 — 단축키 충돌",
+                $"다른 프로그램과 겹쳐 비활성된 단축키: {string.Join(", ", failures)}. 설정에서 변경하세요.",
+                System.Windows.Forms.ToolTipIcon.Warning);
+        }
     }
 
     private void StartCapture(CaptureMode mode)
@@ -439,10 +450,12 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        var window = new SettingsWindow(_settingsManager);
+        // 설정창이 열려 있는 동안은 전역 단축키를 해제해야 OS 충돌 프로브가 자기 자신과 충돌하지 않는다.
+        _hotkeyManager.UnregisterAll();
+        var window = new SettingsWindow(_settingsManager, _hotkeyManager);
         window.Owner = this;
         window.ShowDialog();
-        // Reload settings and re-register hotkeys
+        // 설정 반영 + 단축키 재등록
         _settings = _settingsManager.Load();
         RegisterHotkeys();
     }
