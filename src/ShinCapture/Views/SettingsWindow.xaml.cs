@@ -7,6 +7,10 @@ using Microsoft.Win32;
 using ShinCapture.Models;
 using ShinCapture.Services;
 using ShinCapture.Services.Ai;
+using System.Windows.Controls;
+using System.Windows.Media;
+using ShinCapture.Services.Hotkeys;
+using ShinCapture.Views.Controls;
 
 namespace ShinCapture.Views;
 
@@ -16,12 +20,48 @@ public partial class SettingsWindow : Window
     private AppSettings _settings;
     private ObservableCollection<FixedSizePreset> _fixedSizes = new();
     private readonly DpapiCredentialStore _aiStore = new();
+    private readonly HotkeyManager? _hotkeyManager;
+    private readonly System.Collections.Generic.List<HotkeyRow> _hotkeyRows = new();
 
-    public SettingsWindow(SettingsManager settingsManager, int initialTabIndex = 0)
+    private sealed class HotkeyDef
+    {
+        public string Label = "";
+        public bool Advanced;
+        public Func<HotkeySettings, string> Get = _ => "";
+        public Action<HotkeySettings, string> Set = (_, _) => { };
+    }
+
+    private sealed class HotkeyRow
+    {
+        public HotkeyDef Def = null!;
+        public HotkeyCaptureBox Box = null!;
+        public TextBlock Badge = null!;
+        public TextBlock Suggestion = null!;
+        public string? SuggestedValue;
+    }
+
+    private static readonly HotkeyDef[] HotkeyDefs =
+    {
+        new() { Label = "영역지정",      Get = h => h.RegionCapture,     Set = (h, v) => h.RegionCapture = v },
+        new() { Label = "영역지정 (보조)", Get = h => h.RegionCaptureAlt,  Set = (h, v) => h.RegionCaptureAlt = v },
+        new() { Label = "전체화면",      Get = h => h.FullscreenCapture, Set = (h, v) => h.FullscreenCapture = v },
+        new() { Label = "창 캡쳐",       Get = h => h.WindowCapture,     Set = (h, v) => h.WindowCapture = v },
+        new() { Label = "스크롤",        Get = h => h.ScrollCapture,     Set = (h, v) => h.ScrollCapture = v },
+        new() { Label = "스마트 컷",     Get = h => h.SmartCutCapture,   Set = (h, v) => h.SmartCutCapture = v },
+        new() { Advanced = true, Label = "자유형",     Get = h => h.FreeformCapture,  Set = (h, v) => h.FreeformCapture = v },
+        new() { Advanced = true, Label = "단위영역",   Get = h => h.ElementCapture,   Set = (h, v) => h.ElementCapture = v },
+        new() { Advanced = true, Label = "지정사이즈", Get = h => h.FixedSizeCapture, Set = (h, v) => h.FixedSizeCapture = v },
+        new() { Advanced = true, Label = "텍스트 캡쳐", Get = h => h.TextCapture,      Set = (h, v) => h.TextCapture = v },
+        new() { Advanced = true, Label = "텍스트+번역", Get = h => h.TranslateCapture, Set = (h, v) => h.TranslateCapture = v },
+    };
+
+    public SettingsWindow(SettingsManager settingsManager, HotkeyManager? hotkeyManager = null, int initialTabIndex = 0)
     {
         InitializeComponent();
         _settingsManager = settingsManager;
+        _hotkeyManager = hotkeyManager;
         _settings = settingsManager.Load();
+        BuildHotkeyRows();
         LoadSettings();
         if (initialTabIndex >= 0 && SettingsTabControl != null
             && initialTabIndex < SettingsTabControl.Items.Count)
@@ -56,19 +96,11 @@ public partial class SettingsWindow : Window
         ChkAutoSave.IsChecked = _settings.Save.AutoSave;
         ChkCopyToClipboard.IsChecked = _settings.Save.CopyToClipboard;
 
-        // 단축키
-        TxtHkRegion.Text    = _settings.Hotkeys.RegionCapture;
-        TxtHkRegionAlt.Text = _settings.Hotkeys.RegionCaptureAlt;
-        TxtHkFreeform.Text  = _settings.Hotkeys.FreeformCapture;
-        TxtHkWindow.Text    = _settings.Hotkeys.WindowCapture;
-        TxtHkElement.Text   = _settings.Hotkeys.ElementCapture;
-        TxtHkFullscreen.Text = _settings.Hotkeys.FullscreenCapture;
-        TxtHkScroll.Text    = _settings.Hotkeys.ScrollCapture;
-        TxtHkFixedSize.Text = _settings.Hotkeys.FixedSizeCapture;
-        TxtHkTextCapture.Text = _settings.Hotkeys.TextCapture;
-        TxtHkTranslateCapture.Text = _settings.Hotkeys.TranslateCapture;
-        TxtHkSmartCutCapture.Text = _settings.Hotkeys.SmartCutCapture;
+        // 단축키 — 행 값 채우기 (행은 생성자에서 BuildHotkeyRows로 생성됨)
+        foreach (var row in _hotkeyRows)
+            row.Box.Value = row.Def.Get(_settings.Hotkeys);
         ChkOverridePrintScreen.IsChecked = _settings.Hotkeys.OverridePrintScreen;
+        RefreshHotkeyConflicts();
 
         // OCR 언어 드롭다운 채우기
         PopulateOcrLanguages(_settings.Ocr.Language);
@@ -152,17 +184,8 @@ public partial class SettingsWindow : Window
         _settings.Save.CopyToClipboard = ChkCopyToClipboard.IsChecked == true;
 
         // 단축키
-        _settings.Hotkeys.RegionCapture    = TxtHkRegion.Text;
-        _settings.Hotkeys.RegionCaptureAlt = TxtHkRegionAlt.Text;
-        _settings.Hotkeys.FreeformCapture  = TxtHkFreeform.Text;
-        _settings.Hotkeys.WindowCapture    = TxtHkWindow.Text;
-        _settings.Hotkeys.ElementCapture   = TxtHkElement.Text;
-        _settings.Hotkeys.FullscreenCapture = TxtHkFullscreen.Text;
-        _settings.Hotkeys.ScrollCapture    = TxtHkScroll.Text;
-        _settings.Hotkeys.FixedSizeCapture = TxtHkFixedSize.Text;
-        _settings.Hotkeys.TextCapture = TxtHkTextCapture.Text;
-        _settings.Hotkeys.TranslateCapture = TxtHkTranslateCapture.Text;
-        _settings.Hotkeys.SmartCutCapture = TxtHkSmartCutCapture.Text;
+        foreach (var row in _hotkeyRows)
+            row.Def.Set(_settings.Hotkeys, row.Box.Value);
         _settings.Hotkeys.OverridePrintScreen = ChkOverridePrintScreen.IsChecked == true;
 
         var ocrLangTag = (CmbOcrLanguage.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString();
@@ -341,5 +364,130 @@ public partial class SettingsWindow : Window
             UseShellExecute = true
         });
         e.Handled = true;
+    }
+
+    private void BuildHotkeyRows()
+    {
+        BasicHotkeyPanel.Children.Clear();
+        AdvancedHotkeyPanel.Children.Clear();
+        _hotkeyRows.Clear();
+
+        foreach (var def in HotkeyDefs)
+        {
+            var container = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var label = new TextBlock { Text = def.Label, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(label, 0);
+
+            var box = new HotkeyCaptureBox();
+            Grid.SetColumn(box, 1);
+
+            var badge = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0)
+            };
+            Grid.SetColumn(badge, 2);
+
+            var clear = new Button
+            {
+                Content = "✕",
+                Padding = new Thickness(6, 1, 6, 1),
+                Margin = new Thickness(4, 0, 0, 0),
+                ToolTip = "비우기"
+            };
+            Grid.SetColumn(clear, 3);
+
+            grid.Children.Add(label);
+            grid.Children.Add(box);
+            grid.Children.Add(badge);
+            grid.Children.Add(clear);
+
+            var suggestion = new TextBlock
+            {
+                Margin = new Thickness(124, 2, 0, 0),
+                Foreground = Brushes.OrangeRed,
+                Visibility = Visibility.Collapsed,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+
+            container.Children.Add(grid);
+            container.Children.Add(suggestion);
+
+            var row = new HotkeyRow { Def = def, Box = box, Badge = badge, Suggestion = suggestion };
+            box.ValueCommitted += (_, _) => RefreshHotkeyConflicts();
+            clear.Click += (_, _) => { box.Value = ""; RefreshHotkeyConflicts(); };
+            suggestion.MouseLeftButtonUp += (_, _) =>
+            {
+                if (row.SuggestedValue != null) { box.Value = row.SuggestedValue; RefreshHotkeyConflicts(); }
+            };
+
+            _hotkeyRows.Add(row);
+            (def.Advanced ? AdvancedHotkeyPanel : BasicHotkeyPanel).Children.Add(container);
+        }
+    }
+
+    private void RefreshHotkeyConflicts()
+    {
+        var bindings = new System.Collections.Generic.Dictionary<string, string>();
+        foreach (var r in _hotkeyRows) bindings[r.Def.Label] = r.Box.Value;
+
+        foreach (var row in _hotkeyRows)
+        {
+            var val = row.Box.Value;
+            row.Suggestion.Visibility = Visibility.Collapsed;
+            row.SuggestedValue = null;
+
+            if (string.IsNullOrWhiteSpace(val))
+            {
+                row.Badge.Text = "";
+                row.Badge.ToolTip = "미설정";
+                continue;
+            }
+
+            var conflict = HotkeyConflicts.FindInternalConflict(val, bindings, row.Def.Label);
+            if (conflict != null)
+            {
+                row.Badge.Text = "🟡";
+                row.Badge.ToolTip = $"'{conflict}' 기능과 겹쳐요";
+                continue;
+            }
+
+            bool available = _hotkeyManager?.IsAvailable(val) ?? true;
+            if (!available)
+            {
+                row.Badge.Text = "🔴";
+                row.Badge.ToolTip = "다른 프로그램이 사용 중";
+                var alt = HotkeyConflicts.SuggestAlternative(val, c =>
+                    HotkeyConflicts.FindInternalConflict(c, bindings, row.Def.Label) == null
+                    && (_hotkeyManager?.IsAvailable(c) ?? true));
+                if (alt != null)
+                {
+                    row.SuggestedValue = alt;
+                    row.Suggestion.Text = $"↳ 추천: {alt}  (클릭하여 적용)";
+                    row.Suggestion.Visibility = Visibility.Visible;
+                }
+            }
+            else
+            {
+                row.Badge.Text = "🟢";
+                row.Badge.ToolTip = "사용 가능";
+            }
+        }
+    }
+
+    private void OnResetHotkeys(object sender, RoutedEventArgs e)
+    {
+        var defaults = new HotkeySettings();
+        foreach (var row in _hotkeyRows)
+            row.Box.Value = row.Def.Get(defaults);
+        ChkOverridePrintScreen.IsChecked = defaults.OverridePrintScreen;
+        RefreshHotkeyConflicts();
     }
 }
