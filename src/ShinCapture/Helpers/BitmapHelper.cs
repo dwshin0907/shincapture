@@ -8,20 +8,30 @@ namespace ShinCapture.Helpers;
 
 public static class BitmapHelper
 {
+    /// <summary>
+    /// System.Drawing.Bitmap → WPF BitmapSource. PNG 인코딩/디코딩 없이 픽셀 버퍼를 직접 복사한다.
+    /// 캡쳐 시작(전체 화면)과 돋보기(마우스 이동마다)에서 호출되는 핫패스라 PNG 왕복은 버벅임의 원인이었음.
+    /// GDI+ Format32bppArgb(비프리멀티 BGRA)와 WPF Bgra32가 메모리 레이아웃이 동일해 그대로 복사 가능.
+    /// </summary>
     public static BitmapSource ToBitmapSource(Bitmap bitmap)
     {
-        using var stream = new MemoryStream();
-        bitmap.Save(stream, ImageFormat.Png);
-        stream.Position = 0;
-
-        var bitmapImage = new BitmapImage();
-        bitmapImage.BeginInit();
-        bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-        bitmapImage.StreamSource = stream;
-        bitmapImage.EndInit();
-        bitmapImage.Freeze();
-
-        return bitmapImage;
+        var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        // 요청 포맷이 원본과 달라도 GDI+가 잠금 시점에 변환해준다 (24bpp → 32bpp 등).
+        var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var source = BitmapSource.Create(
+                bitmap.Width, bitmap.Height,
+                96, 96,
+                System.Windows.Media.PixelFormats.Bgra32, null,
+                data.Scan0, data.Stride * bitmap.Height, data.Stride);
+            source.Freeze();
+            return source;
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
     }
 
     public static Bitmap ToBitmap(BitmapSource source)

@@ -25,8 +25,6 @@
   <ItemGroup>
     <PackageReference Include="OpenCvSharp4.Windows" Version="4.10.*" />
     <PackageReference Include="OpenCvSharp4.Extensions" Version="4.10.*" />
-    <PackageReference Include="SkiaSharp" Version="2.88.*" />
-    <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.*" />
     <PackageReference Include="System.Drawing.Common" Version="8.*" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.*" />
     <PackageReference Include="System.Windows.Extensions" Version="8.*" />
@@ -35,6 +33,5 @@
   <ItemGroup>
     <Resource Include="Assets\icon.ico" />
   </ItemGroup>
-
 
 </Project>
