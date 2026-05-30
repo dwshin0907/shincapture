@@ -10,10 +10,25 @@ namespace ShinCapture.Services;
 
 public class HotkeyManager : IDisposable
 {
+    private readonly struct Binding
+    {
+        public readonly uint Modifiers; // 등록에 쓰인 값(MOD_NOREPEAT 포함)
+        public readonly uint Vk;
+        public readonly Action Action;
+        public Binding(uint modifiers, uint vk, Action action)
+        {
+            Modifiers = modifiers; Vk = vk; Action = action;
+        }
+    }
+
     private IntPtr _hwnd;
     private HwndSource? _source;
-    private readonly Dictionary<int, Action> _hotkeyActions = new();
+    private readonly Dictionary<int, Binding> _bindings = new();
     private int _nextId = 1;
+    private bool _suspended;
+
+    /// <summary>앱 전역에서 하나뿐인 인스턴스(설정창이 소유자 경로와 무관하게 접근). Initialize에서 설정됨.</summary>
+    public static HotkeyManager? Current { get; private set; }
 
     public void Initialize(Window window)
     {
@@ -21,6 +36,7 @@ public class HotkeyManager : IDisposable
         _hwnd = helper.EnsureHandle();
         _source = HwndSource.FromHwnd(_hwnd);
         _source?.AddHook(WndProc);
+        Current = this;
     }
 
     public int Register(string hotkeyString, Action action)
@@ -30,7 +46,8 @@ public class HotkeyManager : IDisposable
         var id = _nextId++;
         if (NativeMethods.RegisterHotKey(_hwnd, id, modifiers, vk))
         {
-            _hotkeyActions[id] = action;
+            _bindings[id] = new Binding(modifiers, vk, action);
+            _suspended = false;
             return id;
         }
         return -1;
@@ -38,20 +55,41 @@ public class HotkeyManager : IDisposable
 
     public void Unregister(int id)
     {
-        if (_hotkeyActions.ContainsKey(id))
+        if (_bindings.ContainsKey(id))
         {
             NativeMethods.UnregisterHotKey(_hwnd, id);
-            _hotkeyActions.Remove(id);
+            _bindings.Remove(id);
         }
     }
 
     public void UnregisterAll()
     {
-        foreach (var id in _hotkeyActions.Keys.ToList())
-            Unregister(id);
+        foreach (var id in _bindings.Keys.ToList())
+            NativeMethods.UnregisterHotKey(_hwnd, id);
+        _bindings.Clear();
+        _suspended = false;
     }
 
-    /// <summary>이 조합을 지금 전역 등록 가능한지 프로브한다(성공 시 즉시 해제). UI 스레드에서 호출.</summary>
+    /// <summary>등록 정보를 유지한 채 OS 단축키만 일시 해제(설정창 편집 중). Resume으로 복원.</summary>
+    public void Suspend()
+    {
+        if (_suspended) return;
+        foreach (var id in _bindings.Keys)
+            NativeMethods.UnregisterHotKey(_hwnd, id);
+        _suspended = true;
+    }
+
+    /// <summary>Suspend로 해제했던 단축키를 동일하게 재등록.</summary>
+    public void Resume()
+    {
+        if (!_suspended) return;
+        foreach (var kv in _bindings)
+            NativeMethods.RegisterHotKey(_hwnd, kv.Key, kv.Value.Modifiers, kv.Value.Vk);
+        _suspended = false;
+    }
+
+    /// <summary>이 조합을 지금 전역 등록 가능한지 프로브한다(성공 시 즉시 해제). UI 스레드에서 호출.
+    /// 설정창은 Suspend 상태에서 호출하므로 자기 자신과 충돌하지 않는다.</summary>
     public bool IsAvailable(string hotkeyString)
     {
         if (string.IsNullOrWhiteSpace(hotkeyString)) return true;
@@ -72,9 +110,9 @@ public class HotkeyManager : IDisposable
         if (msg == NativeMethods.WM_HOTKEY)
         {
             var id = wParam.ToInt32();
-            if (_hotkeyActions.TryGetValue(id, out var action))
+            if (_bindings.TryGetValue(id, out var binding))
             {
-                action();
+                binding.Action();
                 handled = true;
             }
         }
@@ -118,5 +156,6 @@ public class HotkeyManager : IDisposable
     {
         UnregisterAll();
         _source?.RemoveHook(WndProc);
+        if (ReferenceEquals(Current, this)) Current = null;
     }
 }

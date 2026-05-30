@@ -450,8 +450,7 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        // 설정창이 열려 있는 동안은 전역 단축키를 해제해야 OS 충돌 프로브가 자기 자신과 충돌하지 않는다.
-        _hotkeyManager.UnregisterAll();
+        // 전역 단축키 일시 해제/복원은 SettingsWindow가 Suspend/Resume로 직접 처리(어느 경로로 열리든 동일).
         var window = new SettingsWindow(_settingsManager, _hotkeyManager);
         window.Owner = this;
         window.ShowDialog();

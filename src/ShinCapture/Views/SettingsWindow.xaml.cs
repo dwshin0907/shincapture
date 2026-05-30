@@ -59,8 +59,15 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         _settingsManager = settingsManager;
-        _hotkeyManager = hotkeyManager;
+        // 명시 전달이 없으면 앱 전역 인스턴스를 사용(편집기/도움말 경로에서도 동작).
+        _hotkeyManager = hotkeyManager ?? HotkeyManager.Current;
         _settings = settingsManager.Load();
+
+        // 설정창이 열려 있는 동안은 전역 단축키를 일시 해제한다(어느 경로로 열리든).
+        // → 이미 쓰는 조합도 입력칸에 들어오고, OS 충돌 프로브가 자기 자신과 충돌하지 않음.
+        _hotkeyManager?.Suspend();
+        Closed += (_, _) => { if (DialogResult != true) _hotkeyManager?.Resume(); };
+
         BuildHotkeyRows();
         LoadSettings();
         if (initialTabIndex >= 0 && SettingsTabControl != null
