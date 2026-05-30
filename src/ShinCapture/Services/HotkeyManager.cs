@@ -51,6 +51,22 @@ public class HotkeyManager : IDisposable
             Unregister(id);
     }
 
+    /// <summary>이 조합을 지금 전역 등록 가능한지 프로브한다(성공 시 즉시 해제). UI 스레드에서 호출.</summary>
+    public bool IsAvailable(string hotkeyString)
+    {
+        if (string.IsNullOrWhiteSpace(hotkeyString)) return true;
+        ParseHotkeyString(hotkeyString, out uint modifiers, out uint vk);
+        if (vk == 0) return false;
+        modifiers |= NativeMethods.MOD_NOREPEAT;
+        const int probeId = 0x7000; // 활성 등록 id 범위(_nextId)와 충돌하지 않는 높은 값
+        if (NativeMethods.RegisterHotKey(_hwnd, probeId, modifiers, vk))
+        {
+            NativeMethods.UnregisterHotKey(_hwnd, probeId);
+            return true;
+        }
+        return false;
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == NativeMethods.WM_HOTKEY)
