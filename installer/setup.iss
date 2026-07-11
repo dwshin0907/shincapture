@@ -7,7 +7,7 @@
 #define MyAppNameEn "ShinCapture"
 ; 버전은 로컬 기본값. CI 빌드에서는 ISCC /DMyAppVersion=x.y.z 로 덮어씀
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.5"
+  #define MyAppVersion "1.3.6"
 #endif
 #define MyAppPublisher "ShinCapture"
 #define MyAppURL "https://shincapture.com"
@@ -31,12 +31,18 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 LZMANumBlockThreads=4
 ; 비주얼
-WizardStyle=modern
+WizardStyle=modern dynamic windows11 hidebevels includetitlebar
 WizardSizePercent=110
 SetupIconFile=..\src\ShinCapture\Assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-WizardImageFile=wizard_sidebar.bmp
-WizardSmallImageFile=wizard_header.bmp
+WizardImageFile=wizard_sidebar.png
+WizardImageFileDynamicDark=wizard_sidebar_dark.png
+WizardSmallImageFile=wizard_mark.png
+WizardSmallImageFileDynamicDark=wizard_mark_dark.png
+WizardImageBackColor=#EFF0FF
+WizardImageBackColorDynamicDark=#121426
+WizardSmallImageBackColor=#FFFFFF
+WizardSmallImageBackColorDynamicDark=#1A1C2B
 ; 권한
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
@@ -53,15 +59,14 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 
 [Messages]
 korean.WelcomeLabel1=%n신캡쳐 v{#MyAppVersion}
-korean.WelcomeLabel2=기존 캡쳐 프로그램의 깔끔한 대안, 신캡쳐를 설치합니다.%n%n%n다른 캡쳐 프로그램과 다른 점:%n%n  ✓  완전 무료 — 광고, 팝업, 회원가입 없음%n  ✓  7가지 캡쳐 모드 — 영역, 창, 스크롤, 전체화면 등%n  ✓  14가지 편집 도구 — 펜, 화살표, 모자이크, 번호 등%n  ✓  실시간 편집 — 색상·폰트 변경 즉시 반영%n  ✓  캡쳐 기록 관리 — 세션 내 50개 보관, 일괄 저장%n  ✓  가벼운 단일 파일 — .NET 런타임 내장, 즉시 실행%n  ✓  글로벌 단축키 — 어떤 앱 위에서든 즉시 캡쳐%n%n계속하려면 [다음]을 클릭하세요.
+korean.WelcomeLabel2=캡처부터 편집까지, 흐름을 끊지 않게.%n%n  ✓  바로 캡처 — 영역·창·스크롤·텍스트를 단축키 한 번으로%n  ✓  바로 편집 — 화살표·모자이크·번호·OCR을 한 화면에서%n  ✓  조용하게 — 광고와 회원가입 없이 트레이에서 가볍게%n%n[다음]을 누르면 설치를 시작합니다.
 
 [Tasks]
 Name: "desktopicon"; Description: "바탕화면에 바로가기 만들기"; GroupDescription: "추가 설정:"
 Name: "startup"; Description: "Windows 시작 시 자동 실행"; GroupDescription: "추가 설정:"
-Name: "quicklaunchicon"; Description: "작업 표시줄에 고정"; GroupDescription: "추가 설정:"; Flags: unchecked
 
 [Files]
-Source: "..\publish_new\ShinCapture.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\ShinCapture.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; 아이콘 (제거 프로그램용)
 Source: "..\src\ShinCapture\Assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -103,15 +108,12 @@ begin
   begin
     WizardForm.FinishedHeadingLabel.Caption := '신캡쳐 설치 완료!';
     WizardForm.FinishedLabel.Caption :=
-      '이제 신캡쳐를 사용할 준비가 되었습니다.' + #13#10 + #13#10 +
-      '빠른 시작 가이드:' + #13#10 +
-      '  PrintScreen — 영역 캡쳐' + #13#10 +
-      '  Ctrl+Shift+W — 창 캡쳐' + #13#10 +
-      '  Ctrl+Shift+A — 전체화면 캡쳐' + #13#10 +
-      '  Ctrl+Shift+S — 스크롤 캡쳐' + #13#10 + #13#10 +
-      '캡쳐 후 편집기에서 펜, 화살표, 도형, 텍스트,' + #13#10 +
-      '모자이크, 번호 등 14가지 도구로 즉시 편집하세요.' + #13#10 + #13#10 +
-      '시스템 트레이에 상주하며 언제든 사용 가능합니다.';
+      '신캡쳐를 사용할 준비가 되었습니다.' + #13#10 + #13#10 +
+      '빠른 시작' + #13#10 +
+      '  PrintScreen — 영역 캡처' + #13#10 +
+      '  Ctrl+Shift+W — 창 캡처' + #13#10 +
+      '  Ctrl+Shift+S — 스크롤 캡처' + #13#10 + #13#10 +
+      '앱은 시스템 트레이에 머물며 언제든 바로 열 수 있습니다.';
   end;
 end;
 
