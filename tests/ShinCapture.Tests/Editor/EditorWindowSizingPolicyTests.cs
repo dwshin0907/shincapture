@@ -162,4 +162,23 @@ public class EditorWindowSizingPolicyTests
         Assert.Equal(shouldFitToCapture, EditorWindowSizingPolicy.ShouldFitToCapture(mode));
         Assert.Equal(shouldGrowForOcr, EditorWindowSizingPolicy.ShouldGrowForOcr(mode));
     }
+
+    [Theory]
+    [InlineData(null, EditorWindowSizeMode.RememberLast, true)]
+    [InlineData(EditorWindowSizeMode.Maximized, EditorWindowSizeMode.RememberLast, true)]
+    [InlineData(EditorWindowSizeMode.FitToCapture, EditorWindowSizeMode.RememberLast, true)]
+    [InlineData(EditorWindowSizeMode.RememberLast, EditorWindowSizeMode.RememberLast, false)]
+    [InlineData(null, EditorWindowSizeMode.Maximized, false)]
+    [InlineData(EditorWindowSizeMode.RememberLast, EditorWindowSizeMode.Maximized, false)]
+    [InlineData(null, EditorWindowSizeMode.FitToCapture, false)]
+    [InlineData(EditorWindowSizeMode.RememberLast, EditorWindowSizeMode.FitToCapture, false)]
+    public void AppliesRememberedSizeOnlyWhenEnteringRememberLast(
+        EditorWindowSizeMode? previous,
+        EditorWindowSizeMode current,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            EditorWindowSizingPolicy.ShouldApplyRememberedSize(previous, current));
+    }
 }

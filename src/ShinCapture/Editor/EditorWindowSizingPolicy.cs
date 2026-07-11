@@ -45,6 +45,12 @@ public static class EditorWindowSizingPolicy
     public static bool ShouldGrowForOcr(EditorWindowSizeMode mode) =>
         mode == EditorWindowSizeMode.FitToCapture;
 
+    public static bool ShouldApplyRememberedSize(
+        EditorWindowSizeMode? previous,
+        EditorWindowSizeMode current) =>
+        current == EditorWindowSizeMode.RememberLast &&
+        previous != EditorWindowSizeMode.RememberLast;
+
     private static bool IsValidDimension(double value) =>
         double.IsFinite(value) && value > 0;
 }

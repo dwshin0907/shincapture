@@ -192,7 +192,6 @@ public partial class MainWindow : Window
                 {
                     _editorWindow.LoadNewCapture(result.Image, autoOcr, autoTranslate);
                     _editorWindow.Show();
-                    _editorWindow.WindowState = WindowState.Normal;
                     _editorWindow.Topmost = true;
                     _editorWindow.Activate();
                     _editorWindow.Topmost = false;
@@ -320,7 +319,7 @@ public partial class MainWindow : Window
         if (_editorWindow != null)
         {
             _editorWindow.Show();
-            _editorWindow.WindowState = WindowState.Normal;
+            _editorWindow.RefreshWindowSizingPolicy();
             _editorWindow.Topmost = true;
             _editorWindow.Activate();
             _editorWindow.Topmost = false;
@@ -531,6 +530,7 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             _settings = _settingsManager.Load();
+            _editorWindow?.RefreshWindowSizingPolicy();
             RegisterHotkeys();
         });
     }

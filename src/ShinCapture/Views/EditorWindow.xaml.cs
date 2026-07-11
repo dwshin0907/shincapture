@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ShinCapture.Editor;
@@ -41,6 +42,9 @@ public partial class EditorWindow : Window
 
     // 캡쳐별 편집 상태 보존
     private readonly Dictionary<BitmapSource, List<EditorObject>> _captureObjects = new();
+    private EditorWindowSizeMode? _appliedWindowSizeMode;
+    private bool _applyingWindowSizingPolicy;
+    private HwndSource? _hwndSource;
 
     public EditorWindow(Bitmap capturedImage, SaveManager saveManager, AppSettings settings, SettingsManager? settingsManager = null)
     {
@@ -65,10 +69,12 @@ public partial class EditorWindow : Window
 
         PreviewKeyDown += OnEditorKeyDown;
         Closing += OnEditorClosing;
+        SourceInitialized += OnSourceInitialized;
+        Closed += OnEditorClosed;
         Loaded += (_, _) =>
         {
             UpdateLayout(); // chrome 측정 강제 (ActualWidth/CanvasScroller.ActualWidth 보장)
-            SizeWindowToImage();
+            ApplyWindowSizingPolicy(imageChanged: true);
             UpdateLayout();
             Canvas.BackgroundImage = _sourceImage;
             Canvas.ApplyInitialZoom();
@@ -138,6 +144,78 @@ public partial class EditorWindow : Window
         _ = MonitorWorkAreaService.CenterWindow(this, workArea);
     }
 
+    public void RefreshWindowSizingPolicy()
+    {
+        if (!IsLoaded || !ApplyWindowSizingPolicy(imageChanged: false))
+            return;
+
+        UpdateLayout();
+        Canvas.ApplyInitialZoom();
+    }
+
+    private EditorSettings CurrentEditorSettings() =>
+        (_settingsManager?.Load() ?? _settings).Editor ?? new EditorSettings();
+
+    private bool ApplyWindowSizingPolicy(bool imageChanged)
+    {
+        EditorSettings editorSettings = CurrentEditorSettings();
+        EditorWindowSizeMode mode = editorSettings.WindowSizeMode;
+        bool changedMode = _appliedWindowSizeMode != mode;
+        bool viewportOrStateChanged = false;
+
+        _applyingWindowSizingPolicy = true;
+        try
+        {
+            if (EditorWindowSizingPolicy.ShouldMaximize(mode))
+            {
+                if (WindowState != WindowState.Maximized)
+                {
+                    WindowState = WindowState.Maximized;
+                    viewportOrStateChanged = true;
+                }
+            }
+            else if (EditorWindowSizingPolicy.ShouldFitToCapture(mode))
+            {
+                if (WindowState != WindowState.Normal)
+                {
+                    WindowState = WindowState.Normal;
+                    viewportOrStateChanged = true;
+                }
+
+                if (imageChanged || changedMode)
+                {
+                    SizeWindowToImage();
+                    viewportOrStateChanged = true;
+                }
+            }
+            else if (EditorWindowSizingPolicy.ShouldApplyRememberedSize(
+                         _appliedWindowSizeMode,
+                         mode))
+            {
+                if (WindowState != WindowState.Normal)
+                    WindowState = WindowState.Normal;
+
+                MonitorWorkArea workArea = MonitorWorkAreaService.GetForWindow(this);
+                EditorWindowSize size = EditorWindowSizingPolicy.NormalizeRememberedSize(
+                    editorSettings.WindowWidth,
+                    editorSettings.WindowHeight,
+                    workArea.DipWidth,
+                    workArea.DipHeight);
+                Width = size.Width;
+                Height = size.Height;
+                _ = MonitorWorkAreaService.CenterWindow(this, workArea);
+                viewportOrStateChanged = true;
+            }
+
+            _appliedWindowSizeMode = mode;
+            return viewportOrStateChanged;
+        }
+        finally
+        {
+            _applyingWindowSizingPolicy = false;
+        }
+    }
+
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
     /// <param name="autoOcr">true이면 로드 직후 OCR을 자동 실행 (Translate 모드 전용)</param>
     /// <param name="autoTranslate">true이면 OCR 직후 자동 번역 실행 (번역 버튼 흐름 전용)</param>
@@ -165,7 +243,7 @@ public partial class EditorWindow : Window
         // 윈도우 사이즈를 결정함. 이 한 줄 없으면 chrome=160 fallback으로 윈도우가 작게 결정되고
         // viewport가 좁아 fit zoom이 38%/42% 같은 작은 값이 나옴.
         UpdateLayout();
-        SizeWindowToImage();
+        ApplyWindowSizingPolicy(imageChanged: true);
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
         Canvas.ApplyInitialZoom();
@@ -221,7 +299,7 @@ public partial class EditorWindow : Window
 
         if (!IsVisible) Show();
         UpdateLayout();
-        SizeWindowToImage();
+        ApplyWindowSizingPolicy(imageChanged: true);
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
         Canvas.ApplyInitialZoom();
@@ -236,6 +314,60 @@ public partial class EditorWindow : Window
     }
 
     private bool _forceClose;
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        _hwndSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        _hwndSource?.AddHook(EditorWindowProc);
+    }
+
+    private void OnEditorClosed(object? sender, EventArgs e)
+    {
+        _hwndSource?.RemoveHook(EditorWindowProc);
+        _hwndSource = null;
+    }
+
+    private IntPtr EditorWindowProc(
+        IntPtr hwnd,
+        int msg,
+        IntPtr wParam,
+        IntPtr lParam,
+        ref bool handled)
+    {
+        if (msg == NativeMethods.WM_EXITSIZEMOVE)
+            PersistUserWindowSize();
+
+        return IntPtr.Zero;
+    }
+
+    private void PersistUserWindowSize()
+    {
+        if (_applyingWindowSizingPolicy || WindowState != WindowState.Normal)
+            return;
+        if (CurrentEditorSettings().WindowSizeMode != EditorWindowSizeMode.RememberLast)
+            return;
+
+        Rect bounds = RestoreBounds;
+        if (!EditorWindowSizingPolicy.IsValidPersistedSize(bounds.Width, bounds.Height))
+            return;
+
+        try
+        {
+            _settings.Editor ??= new EditorSettings();
+            _settings.Editor.WindowWidth = bounds.Width;
+            _settings.Editor.WindowHeight = bounds.Height;
+            _settingsManager?.Update(settings =>
+            {
+                settings.Editor ??= new EditorSettings();
+                settings.Editor.WindowWidth = bounds.Width;
+                settings.Editor.WindowHeight = bounds.Height;
+            }, raiseChanged: false);
+        }
+        catch
+        {
+            // Window resizing must remain usable even if settings persistence fails.
+        }
+    }
 
     /// <summary>X 버튼 ▸ 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
     private void OnEditorClosing(object? sender, System.ComponentModel.CancelEventArgs e)
