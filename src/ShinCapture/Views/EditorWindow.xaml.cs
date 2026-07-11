@@ -120,11 +120,9 @@ public partial class EditorWindow : Window
         double desiredH = imgLogicalH + chromeH + padding;
 
         // 화면 크기 제한
-        var screen = System.Windows.Forms.Screen.FromHandle(
-            new System.Windows.Interop.WindowInteropHelper(this).Handle);
-        var workArea = screen.WorkingArea;
-        double maxW = workArea.Width / dpiScale;
-        double maxH = workArea.Height / dpiScale;
+        MonitorWorkArea workArea = MonitorWorkAreaService.GetForWindow(this);
+        double maxW = workArea.DipWidth;
+        double maxH = workArea.DipHeight;
 
         // 최소 보장 — 작은 캡쳐일 때 윈도우가 너무 좁으면 툴바(WrapPanel)가 세로로 wrap되어
         // ScrollViewer 영역이 줄어들고 결과적으로 캡쳐가 안 보이는 문제 방지.
@@ -137,8 +135,7 @@ public partial class EditorWindow : Window
         Height = Math.Min(Math.Max(desiredH, minH), maxH);
 
         // 화면 중앙 배치
-        Left = (maxW - Width) / 2 + workArea.Left / dpiScale;
-        Top = (maxH - Height) / 2 + workArea.Top / dpiScale;
+        MonitorWorkAreaService.CenterWindow(this, workArea);
     }
 
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
