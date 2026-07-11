@@ -45,15 +45,15 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Card" Property="Background" Value="#EEF0FF"/>
-                                <Setter TargetName="Card" Property="BorderBrush" Value="#BFC4FF"/>
+                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource TrayAccentSurfaceBrush}"/>
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource TrayAccentBorderBrush}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="Card" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Card" Property="Background" Value="#E1E4FF"/>
+                                <Setter TargetName="Card" Property="Background" Value="{DynamicResource TrayAccentPressedBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
@@ -64,8 +64,8 @@
             </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsWide}" Value="True">
-                    <Setter Property="Background" Value="#EEF0FF"/>
-                    <Setter Property="BorderBrush" Value="#C9CDFB"/>
+                    <Setter Property="Background" Value="{DynamicResource TrayAccentSurfaceBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource TrayAccentBorderBrush}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -174,14 +174,14 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                     <Border Grid.Column="1"
-                            Background="#E9F9F3"
+                            Background="{DynamicResource TrayReadySurfaceBrush}"
                             CornerRadius="10"
                             Padding="9,4"
                             VerticalAlignment="Top">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="6" Height="6" Fill="#17805C" Margin="0,0,5,0"/>
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource TrayReadyForegroundBrush}" Margin="0,0,5,0"/>
                             <TextBlock Text="준비됨"
-                                       Foreground="#176B50"
+                                       Foreground="{DynamicResource TrayReadyForegroundBrush}"
                                        FontSize="10"
                                        FontWeight="SemiBold"/>
                         </StackPanel>

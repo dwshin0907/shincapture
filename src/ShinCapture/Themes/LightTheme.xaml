@@ -26,6 +26,12 @@
 
     <Color x:Key="ErrorColor">#C42B1C</Color>
 
+    <Color x:Key="TrayAccentSurfaceColor">#EEF0FF</Color>
+    <Color x:Key="TrayAccentBorderColor">#C9CDFB</Color>
+    <Color x:Key="TrayAccentPressedColor">#E1E4FF</Color>
+    <Color x:Key="TrayReadySurfaceColor">#E9F9F3</Color>
+    <Color x:Key="TrayReadyForegroundColor">#176B50</Color>
+
     <!-- === Brushes === -->
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
@@ -48,6 +54,12 @@
     <SolidColorBrush x:Key="ToolbarButtonActiveBorderBrush" Color="{StaticResource ToolbarButtonActiveBorderColor}"/>
 
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}"/>
+
+    <SolidColorBrush x:Key="TrayAccentSurfaceBrush" Color="{StaticResource TrayAccentSurfaceColor}"/>
+    <SolidColorBrush x:Key="TrayAccentBorderBrush" Color="{StaticResource TrayAccentBorderColor}"/>
+    <SolidColorBrush x:Key="TrayAccentPressedBrush" Color="{StaticResource TrayAccentPressedColor}"/>
+    <SolidColorBrush x:Key="TrayReadySurfaceBrush" Color="{StaticResource TrayReadySurfaceColor}"/>
+    <SolidColorBrush x:Key="TrayReadyForegroundBrush" Color="{StaticResource TrayReadyForegroundColor}"/>
 
     <!-- === Dimensions === -->
     <CornerRadius x:Key="ButtonCornerRadius">6</CornerRadius>
