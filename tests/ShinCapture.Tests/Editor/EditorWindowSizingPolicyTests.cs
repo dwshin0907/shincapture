@@ -64,14 +64,20 @@ public class EditorWindowSizingPolicyTests
         Assert.Equal(728, aboveWorkArea.Height);
     }
 
-    [Fact]
-    public void AppliesWindowSizeModeRules()
+    [Theory]
+    [InlineData(EditorWindowSizeMode.RememberLast, true, false, false, false)]
+    [InlineData(EditorWindowSizeMode.Maximized, false, true, false, false)]
+    [InlineData(EditorWindowSizeMode.FitToCapture, false, false, true, true)]
+    public void AppliesWindowSizeModeRules(
+        EditorWindowSizeMode mode,
+        bool shouldKeepOuterSize,
+        bool shouldMaximize,
+        bool shouldFitToCapture,
+        bool shouldGrowForOcr)
     {
-        Assert.True(EditorWindowSizingPolicy.ShouldKeepOuterSize(EditorWindowSizeMode.RememberLast));
-        Assert.True(EditorWindowSizingPolicy.ShouldMaximize(EditorWindowSizeMode.Maximized));
-        Assert.True(EditorWindowSizingPolicy.ShouldFitToCapture(EditorWindowSizeMode.FitToCapture));
-        Assert.True(EditorWindowSizingPolicy.ShouldGrowForOcr(EditorWindowSizeMode.FitToCapture));
-        Assert.False(EditorWindowSizingPolicy.ShouldGrowForOcr(EditorWindowSizeMode.RememberLast));
-        Assert.False(EditorWindowSizingPolicy.ShouldGrowForOcr(EditorWindowSizeMode.Maximized));
+        Assert.Equal(shouldKeepOuterSize, EditorWindowSizingPolicy.ShouldKeepOuterSize(mode));
+        Assert.Equal(shouldMaximize, EditorWindowSizingPolicy.ShouldMaximize(mode));
+        Assert.Equal(shouldFitToCapture, EditorWindowSizingPolicy.ShouldFitToCapture(mode));
+        Assert.Equal(shouldGrowForOcr, EditorWindowSizingPolicy.ShouldGrowForOcr(mode));
     }
 }
