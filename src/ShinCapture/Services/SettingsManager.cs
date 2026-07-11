@@ -10,6 +10,7 @@ public class SettingsManager
 {
     private readonly string _settingsDir;
     private readonly string _filePath;
+    private readonly object _sync = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -38,12 +39,44 @@ public class SettingsManager
 
     public AppSettings Load()
     {
+        lock (_sync)
+        {
+            return LoadCore();
+        }
+    }
+
+    public void Save(AppSettings settings)
+    {
+        lock (_sync)
+        {
+            WriteCore(settings);
+        }
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Update(Action<AppSettings> update, bool raiseChanged = true)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        lock (_sync)
+        {
+            var settings = LoadCore();
+            update(settings);
+            WriteCore(settings);
+        }
+
+        if (raiseChanged)
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private AppSettings LoadCore()
+    {
         try
         {
             if (!File.Exists(_filePath))
                 return new AppSettings();
             var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            return Normalize(JsonSerializer.Deserialize<AppSettings>(json, JsonOptions));
         }
         catch
         {
@@ -51,11 +84,24 @@ public class SettingsManager
         }
     }
 
-    public void Save(AppSettings settings)
+    private void WriteCore(AppSettings settings)
     {
         Directory.CreateDirectory(_settingsDir);
-        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        var json = JsonSerializer.Serialize(Normalize(settings), JsonOptions);
         File.WriteAllText(_filePath, json);
-        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static AppSettings Normalize(AppSettings? settings)
+    {
+        settings ??= new AppSettings();
+        settings.General ??= new GeneralSettings();
+        settings.Capture ??= new CaptureSettings();
+        settings.Editor ??= new EditorSettings();
+        settings.Save ??= new SaveSettings();
+        settings.Hotkeys ??= new HotkeySettings();
+        settings.Ocr ??= new OcrSettings();
+        settings.Ai ??= new AiSettings();
+        settings.RecentCaptures ??= new RecentCapturesSettings();
+        return settings;
     }
 }

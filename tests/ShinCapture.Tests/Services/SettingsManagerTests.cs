@@ -50,6 +50,72 @@ public class SettingsManagerTests : IDisposable
     }
 
     [Fact]
+    public void Load_LegacySettingsWithoutEditor_UsesEditorDefaultsAndPreservesGeneralSettings()
+    {
+        File.WriteAllText(
+            Path.Combine(_tempDir, "settings.json"),
+            "{\"general\":{\"autoStart\":true}}");
+
+        var loaded = _manager.Load();
+
+        Assert.True(loaded.General.AutoStart);
+        Assert.Equal(EditorWindowSizeMode.RememberLast, loaded.Editor.WindowSizeMode);
+        Assert.Equal(1100, loaded.Editor.WindowWidth);
+        Assert.Equal(750, loaded.Editor.WindowHeight);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsEditorSettings()
+    {
+        var settings = _manager.Load();
+        settings.Editor.WindowSizeMode = EditorWindowSizeMode.Maximized;
+        settings.Editor.WindowWidth = 1280;
+        settings.Editor.WindowHeight = 720;
+
+        _manager.Save(settings);
+        var loaded = _manager.Load();
+
+        Assert.Equal(EditorWindowSizeMode.Maximized, loaded.Editor.WindowSizeMode);
+        Assert.Equal(1280, loaded.Editor.WindowWidth);
+        Assert.Equal(720, loaded.Editor.WindowHeight);
+    }
+
+    [Fact]
+    public void Update_WithoutRaisingChanged_PreservesHotkeyAndUpdatesEditorSettings()
+    {
+        var settings = _manager.Load();
+        settings.Hotkeys.RegionCapture = "Ctrl+Alt+9";
+        _manager.Save(settings);
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+
+        _manager.Update(
+            current =>
+            {
+                current.Editor.WindowWidth = 1234;
+                current.Editor.WindowHeight = 777;
+            },
+            raiseChanged: false);
+        var loaded = _manager.Load();
+
+        Assert.Equal("Ctrl+Alt+9", loaded.Hotkeys.RegionCapture);
+        Assert.Equal(1234, loaded.Editor.WindowWidth);
+        Assert.Equal(777, loaded.Editor.WindowHeight);
+        Assert.Equal(0, eventCount);
+    }
+
+    [Fact]
+    public void Update_ByDefault_RaisesSettingsChangedExactlyOnce()
+    {
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+
+        _manager.Update(settings => settings.Editor.WindowWidth = 1234);
+
+        Assert.Equal(1, eventCount);
+    }
+
+    [Fact]
     public void Save_CreatesJsonFile()
     {
         var settings = _manager.Load();
