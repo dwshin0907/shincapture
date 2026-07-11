@@ -1,0 +1,258 @@
+<Window x:Class="ShinCapture.Views.TrayFlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:ShinCapture.Views.Controls"
+        Title="신캡쳐 빠른 메뉴"
+        Width="392"
+        SizeToContent="Height"
+        MaxHeight="680"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="{DynamicResource BackgroundPrimaryBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="{DynamicResource AppFont}"
+        PreviewKeyDown="OnPreviewKeyDown"
+        Deactivated="OnDeactivated">
+    <Window.Resources>
+        <controls:TrayIconGeometryConverter x:Key="TrayIcon"/>
+
+        <Style x:Key="TrayTile" TargetType="Button">
+            <Setter Property="MinHeight" Value="56"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Background" Value="{DynamicResource BackgroundSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderLightBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Card"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="#EEF0FF"/>
+                                <Setter TargetName="Card" Property="BorderBrush" Value="#BFC4FF"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Card" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="#E1E4FF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsWide}" Value="True">
+                    <Setter Property="Background" Value="#EEF0FF"/>
+                    <Setter Property="BorderBrush" Value="#C9CDFB"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="TrayFooterButton" TargetType="Button">
+            <Setter Property="MinHeight" Value="38"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="FooterCard"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FooterCard" Property="Background" Value="{DynamicResource BackgroundSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FooterCard" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="FooterCard" Property="Background" Value="{DynamicResource BackgroundTertiaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="CaptureActionTemplate">
+            <Button Style="{StaticResource TrayTile}"
+                    Tag="{Binding}"
+                    Click="OnCaptureClick"
+                    AutomationProperties.Name="{Binding Label}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Data="{Binding IconKey, Converter={StaticResource TrayIcon}}"
+                          Stroke="{DynamicResource TextSecondaryBrush}"
+                          StrokeThickness="1.8"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Width="20"
+                          Height="20"
+                          Stretch="Uniform"/>
+                    <StackPanel Grid.Column="1" Margin="2,0,0,0">
+                        <TextBlock Text="{Binding Label}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Shortcut}"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            Background="{DynamicResource BackgroundPrimaryBrush}"
+            KeyboardNavigation.TabNavigation="Cycle"
+            KeyboardNavigation.DirectionalNavigation="Contained"
+            SnapsToDevicePixels="True">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      CanContentScroll="False">
+            <Grid Margin="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Margin="4,2,4,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="신캡쳐"
+                                   FontSize="18"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock x:Name="WindowModeText"
+                                   Margin="0,2,0,0"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                    <Border Grid.Column="1"
+                            Background="#E9F9F3"
+                            CornerRadius="10"
+                            Padding="9,4"
+                            VerticalAlignment="Top">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="6" Height="6" Fill="#17805C" Margin="0,0,5,0"/>
+                            <TextBlock Text="준비됨"
+                                       Foreground="#176B50"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <ContentControl x:Name="PrimaryActionHost"
+                                Grid.Row="1"
+                                ContentTemplate="{StaticResource CaptureActionTemplate}"/>
+
+                <ItemsControl x:Name="SecondaryActions"
+                              Grid.Row="2"
+                              Margin="0,2"
+                              ItemTemplate="{StaticResource CaptureActionTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="2"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <ContentControl x:Name="TranslateActionHost"
+                                Grid.Row="3"
+                                ContentTemplate="{StaticResource CaptureActionTemplate}"/>
+
+                <StackPanel Grid.Row="4" Margin="3,10,3,0">
+                    <Separator Margin="0,0,0,9" Background="{DynamicResource DividerBrush}"/>
+                    <UniformGrid Columns="2" Margin="0,0,0,8">
+                        <Button Style="{StaticResource TrayTile}"
+                                Tag="OpenEditor"
+                                Click="OnCommandClick"
+                                AutomationProperties.Name="편집기 열기">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Path Data="{Binding Source=editor, Converter={StaticResource TrayIcon}}"
+                                      Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.8" Width="18" Height="18" Stretch="Uniform"/>
+                                <TextBlock Text="편집기 열기" Margin="8,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource TrayTile}"
+                                Tag="OpenSaveFolder"
+                                Click="OnCommandClick"
+                                AutomationProperties.Name="저장 폴더 열기">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Path Data="{Binding Source=folder, Converter={StaticResource TrayIcon}}"
+                                      Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.8" Width="18" Height="18" Stretch="Uniform"/>
+                                <TextBlock Text="저장 폴더" Margin="8,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Style="{StaticResource TrayFooterButton}" Content="설정"
+                                Tag="OpenSettings" Click="OnCommandClick" AutomationProperties.Name="환경설정"/>
+                        <Button Grid.Column="1" Style="{StaticResource TrayFooterButton}" Content="API 키"
+                                Tag="OpenApiKeyHelp" Click="OnCommandClick" AutomationProperties.Name="API 키 발급 안내"/>
+                        <Button Grid.Column="2" Style="{StaticResource TrayFooterButton}" Content="정보"
+                                Tag="ShowAbout" Click="OnCommandClick" AutomationProperties.Name="신캡쳐 정보"/>
+                        <Button Grid.Column="3" Style="{StaticResource TrayFooterButton}" Content="종료"
+                                Tag="Exit" Click="OnCommandClick" Foreground="{DynamicResource ErrorBrush}"
+                                AutomationProperties.Name="신캡쳐 종료"/>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Border>
+</Window>
