@@ -110,6 +110,23 @@ class BrandAssetGeneratorTests(unittest.TestCase):
                         self.assertEqual((size, size), frame.size)
                         self.assertEqual("RGBA", frame.mode)
 
+    def test_16px_dib_mask_marks_only_fully_transparent_pixels(self):
+        size = 16
+        image = gen_brand_assets.draw_app_icon(size)
+        payload = gen_brand_assets._image_to_dib(image)
+        mask_stride = ((size + 31) // 32) * 4
+        mask_offset = 40 + size * size * 4
+
+        def mask_bit(x: int, y: int) -> int:
+            bottom_up_row = size - 1 - y
+            byte_offset = mask_offset + bottom_up_row * mask_stride + x // 8
+            return 1 if payload[byte_offset] & (0x80 >> (x % 8)) else 0
+
+        self.assertEqual(0, image.getpixel((0, 0))[3])
+        self.assertEqual(255, image.getpixel((size // 2, size // 2))[3])
+        self.assertEqual(1, mask_bit(0, 0))
+        self.assertEqual(0, mask_bit(size // 2, size // 2))
+
     def test_small_icon_remains_simple_nonempty_and_without_orange(self):
         image = gen_brand_assets.draw_app_icon(16)
         colors = image.convert("RGBA").getcolors(maxcolors=256)

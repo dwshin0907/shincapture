@@ -129,12 +129,15 @@ def _image_to_dib(image: Image.Image) -> bytes:
         0,
     )
     xor = bytearray()
-    for y in range(height - 1, -1, -1):
+    mask_stride = ((width + 31) // 32) * 4
+    mask = bytearray(mask_stride * height)
+    for bottom_up_row, y in enumerate(range(height - 1, -1, -1)):
         for x in range(width):
             red, green, blue, alpha = pixels[x, y]
             xor.extend((blue, green, red, alpha))
-    mask_row = ((width + 31) // 32) * 4
-    return header + bytes(xor) + bytes(mask_row * height)
+            if alpha == 0:
+                mask[bottom_up_row * mask_stride + x // 8] |= 0x80 >> (x % 8)
+    return header + bytes(xor) + bytes(mask)
 
 
 def write_ico(path: Path) -> None:
