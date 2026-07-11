@@ -19,6 +19,7 @@ namespace ShinCapture.Views;
 public partial class TrayFlyoutWindow : Window
 {
     private readonly ObservableCollection<TrayCaptureAction> _secondaryCaptureActions = [];
+    private bool _isPositioning;
 
     public event Action<CaptureMode>? CaptureRequested;
     public event Action<TrayMenuCommand>? CommandRequested;
@@ -31,66 +32,100 @@ public partial class TrayFlyoutWindow : Window
 
     public void ShowNearCursor()
     {
-        if (!NativeMethods.GetCursorPos(out NativeMethods.POINT cursor))
-            throw new InvalidOperationException("Unable to read the tray cursor position.");
-
-        if (!IsVisible)
-            Show();
-        UpdateLayout();
-
-        IntPtr handle = new WindowInteropHelper(this).Handle;
-        IntPtr monitor = NativeMethods.MonitorFromPoint(
-            cursor,
-            NativeMethods.MONITOR_DEFAULTTONEAREST);
-        NativeMethods.MONITORINFO monitorInfo = new()
+        _isPositioning = true;
+        try
         {
-            cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>()
-        };
-        if (handle == IntPtr.Zero ||
-            monitor == IntPtr.Zero ||
-            !NativeMethods.GetMonitorInfo(monitor, ref monitorInfo) ||
-            monitorInfo.rcWork.Width <= 0 ||
-            monitorInfo.rcWork.Height <= 0)
-        {
-            throw new InvalidOperationException("Unable to resolve the tray monitor work area.");
+            if (!NativeMethods.GetCursorPos(out NativeMethods.POINT cursor))
+                throw new InvalidOperationException("Unable to read the tray cursor position.");
+
+            IntPtr monitor = NativeMethods.MonitorFromPoint(
+                cursor,
+                NativeMethods.MONITOR_DEFAULTTONEAREST);
+            NativeMethods.MONITORINFO monitorInfo = new()
+            {
+                cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>()
+            };
+            if (monitor == IntPtr.Zero ||
+                !NativeMethods.GetMonitorInfo(monitor, ref monitorInfo) ||
+                monitorInfo.rcWork.Width <= 0 ||
+                monitorInfo.rcWork.Height <= 0)
+            {
+                throw new InvalidOperationException("Unable to resolve the tray monitor work area.");
+            }
+
+            IntPtr handle = new WindowInteropHelper(this).EnsureHandle();
+            if (handle == IntPtr.Zero)
+                throw new InvalidOperationException("Unable to create the tray flyout handle.");
+
+            int preliminaryX = InsetWorkAreaCoordinate(
+                monitorInfo.rcWork.Left,
+                monitorInfo.rcWork.Width);
+            int preliminaryY = InsetWorkAreaCoordinate(
+                monitorInfo.rcWork.Top,
+                monitorInfo.rcWork.Height);
+            if (!NativeMethods.SetWindowPos(
+                    handle,
+                    IntPtr.Zero,
+                    preliminaryX,
+                    preliminaryY,
+                    0,
+                    0,
+                    NativeMethods.SWP_NOSIZE |
+                    NativeMethods.SWP_NOZORDER |
+                    NativeMethods.SWP_NOACTIVATE))
+            {
+                throw CreatePositioningException("Unable to move the tray flyout to its target monitor.");
+            }
+
+            double visualDpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            double dpiScale = MonitorWorkAreaService.ResolveDpiScale(
+                NativeMethods.GetDpiForWindow(handle),
+                visualDpiScale);
+            MonitorWorkArea workArea = new(
+                monitorInfo.rcWork.Left,
+                monitorInfo.rcWork.Top,
+                monitorInfo.rcWork.Width,
+                monitorInfo.rcWork.Height,
+                dpiScale);
+
+            if (!IsVisible)
+                Show();
+            UpdateLayout();
+
+            WindowPixelBounds target = TrayFlyoutPositioner.CalculateFromDips(
+                new PixelPoint(cursor.X, cursor.Y),
+                workArea,
+                ActualWidth,
+                ActualHeight);
+
+            if (!NativeMethods.SetWindowPos(
+                    handle,
+                    NativeMethods.HWND_TOPMOST,
+                    target.Left,
+                    target.Top,
+                    target.Width,
+                    target.Height,
+                    0))
+            {
+                throw CreatePositioningException("Unable to position the tray flyout.");
+            }
+
+            TryApplyRoundedCorners(handle);
+            bool foregroundActivated = NativeMethods.SetForegroundWindow(handle);
+            bool wpfActivated = Activate();
+            if (foregroundActivated || wpfActivated || IsActive)
+                ScheduleInitialFocus();
         }
-
-        double visualDpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        double dpiScale = MonitorWorkAreaService.ResolveDpiScale(
-            NativeMethods.GetDpiForWindow(handle),
-            visualDpiScale);
-        PixelSize desiredSize = new(
-            ToPhysicalSize(ActualWidth, dpiScale),
-            ToPhysicalSize(ActualHeight, dpiScale));
-        MonitorWorkArea workArea = new(
-            monitorInfo.rcWork.Left,
-            monitorInfo.rcWork.Top,
-            monitorInfo.rcWork.Width,
-            monitorInfo.rcWork.Height,
-            dpiScale);
-        WindowPixelBounds target = TrayFlyoutPositioner.Calculate(
-            new PixelPoint(cursor.X, cursor.Y),
-            workArea,
-            desiredSize);
-
-        if (!NativeMethods.SetWindowPos(
-                handle,
-                new IntPtr(-1),
-                target.Left,
-                target.Top,
-                target.Width,
-                target.Height,
-                0))
+        catch
         {
-            throw new InvalidOperationException(
-                "Unable to position the tray flyout.",
-                new Win32Exception(Marshal.GetLastWin32Error()));
+            if (IsVisible)
+                Hide();
+            throw;
         }
-
-        TryApplyRoundedCorners(handle);
-        _ = NativeMethods.SetForegroundWindow(handle);
-        _ = Activate();
-        ScheduleInitialFocus();
+        finally
+        {
+            _isPositioning = false;
+        }
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -165,19 +200,20 @@ public partial class TrayFlyoutWindow : Window
         }), DispatcherPriority.Input);
     }
 
-    private void OnDeactivated(object? sender, EventArgs e) => Hide();
-
-    private static int ToPhysicalSize(double dipSize, double dpiScale)
+    private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (!double.IsFinite(dipSize) || dipSize <= 0)
-            throw new InvalidOperationException("Unable to measure the tray flyout size.");
-
-        double physicalSize = Math.Ceiling(dipSize * dpiScale);
-        if (!double.IsFinite(physicalSize) || physicalSize <= 0 || physicalSize > int.MaxValue)
-            throw new InvalidOperationException("Unable to convert the tray flyout size to pixels.");
-
-        return (int)physicalSize;
+        if (!_isPositioning)
+            Hide();
     }
+
+    private static int InsetWorkAreaCoordinate(int origin, int size)
+    {
+        long inset = Math.Min(TrayFlyoutPositioner.Margin, Math.Max(0, size - 1));
+        return (int)Math.Clamp((long)origin + inset, int.MinValue, int.MaxValue);
+    }
+
+    private static InvalidOperationException CreatePositioningException(string message) =>
+        new(message, new Win32Exception(Marshal.GetLastWin32Error()));
 
     private static void TryApplyRoundedCorners(IntPtr handle)
     {

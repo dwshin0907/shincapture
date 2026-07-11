@@ -150,4 +150,66 @@ public class TrayFlyoutPositionerTests
             cursor.X - flyout.Width + TrayFlyoutPositioner.CursorHorizontalOffset,
             bounds.Left);
     }
+
+    [Fact]
+    public void ConvertsDipSizeToPhysicalPixelsAtScaleOne()
+    {
+        WindowPixelBounds bounds = TrayFlyoutPositioner.CalculateFromDips(
+            new PixelPoint(1000, 100),
+            new MonitorWorkArea(0, 0, 1920, 1080, 1.0),
+            widthDip: 392,
+            heightDip: 500);
+
+        Assert.Equal(392, bounds.Width);
+        Assert.Equal(500, bounds.Height);
+        Assert.True(bounds.Top > 100);
+    }
+
+    [Fact]
+    public void ConvertsDipSizeToPhysicalPixelsAtScaleOnePointFive()
+    {
+        WindowPixelBounds bounds = TrayFlyoutPositioner.CalculateFromDips(
+            new PixelPoint(2200, 1580),
+            new MonitorWorkArea(0, 0, 2880, 1620, 1.5),
+            widthDip: 392,
+            heightDip: 500);
+
+        Assert.Equal(588, bounds.Width);
+        Assert.Equal(750, bounds.Height);
+        Assert.True(bounds.Top < 1580);
+    }
+
+    [Fact]
+    public void SafelyHandlesFractionalInvalidAndOverflowingDipSizesAndScales()
+    {
+        WindowPixelBounds rounded = TrayFlyoutPositioner.CalculateFromDips(
+            new PixelPoint(100, 100),
+            new MonitorWorkArea(0, 0, 1000, 1000, 1.5),
+            widthDip: 10.1,
+            heightDip: 20.1);
+        Assert.Equal(16, rounded.Width);
+        Assert.Equal(31, rounded.Height);
+
+        (double Width, double Height, double Scale)[] invalidCases =
+        [
+            (0, -1, double.NaN),
+            (double.NaN, double.PositiveInfinity, 0),
+            (double.NegativeInfinity, 0, -1),
+            (double.MaxValue, double.MaxValue, double.MaxValue)
+        ];
+
+        foreach ((double width, double height, double scale) in invalidCases)
+        {
+            WindowPixelBounds bounds = TrayFlyoutPositioner.CalculateFromDips(
+                new PixelPoint(100, 100),
+                new MonitorWorkArea(0, 0, 320, 240, scale),
+                width,
+                height);
+
+            Assert.InRange(bounds.Width, 1, 320);
+            Assert.InRange(bounds.Height, 1, 240);
+            Assert.InRange(bounds.Left, 0, 319);
+            Assert.InRange(bounds.Top, 0, 239);
+        }
+    }
 }

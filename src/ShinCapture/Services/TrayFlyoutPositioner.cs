@@ -12,6 +12,20 @@ public static class TrayFlyoutPositioner
     public const int CursorGap = 10;
     public const int CursorHorizontalOffset = 20;
 
+    public static WindowPixelBounds CalculateFromDips(
+        PixelPoint cursor,
+        MonitorWorkArea workArea,
+        double widthDip,
+        double heightDip)
+    {
+        return Calculate(
+            cursor,
+            workArea,
+            new PixelSize(
+                ToPhysicalSize(widthDip, workArea.DpiScale),
+                ToPhysicalSize(heightDip, workArea.DpiScale)));
+    }
+
     public static WindowPixelBounds Calculate(
         PixelPoint cursor,
         MonitorWorkArea workArea,
@@ -43,5 +57,15 @@ public static class TrayFlyoutPositioner
         left = Math.Clamp(left, int.MinValue, (long)int.MaxValue - width);
         top = Math.Clamp(top, int.MinValue, (long)int.MaxValue - height);
         return new WindowPixelBounds((int)left, (int)top, width, height);
+    }
+
+    private static int ToPhysicalSize(double dipSize, double dpiScale)
+    {
+        double safeDipSize = double.IsFinite(dipSize) && dipSize > 0 ? dipSize : 1.0;
+        double physicalSize = Math.Ceiling(safeDipSize * dpiScale);
+        if (!double.IsFinite(physicalSize) || physicalSize >= int.MaxValue)
+            return int.MaxValue;
+
+        return Math.Max(1, (int)physicalSize);
     }
 }

@@ -94,10 +94,12 @@ internal static class NativeMethods
     public const int WM_ENTERSIZEMOVE = 0x0231;
     public const int WM_EXITSIZEMOVE = 0x0232;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
+    public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     public const int DWMWCP_ROUND = 2;
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
 
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
