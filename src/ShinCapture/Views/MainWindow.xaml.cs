@@ -109,6 +109,8 @@ public partial class MainWindow : Window
 
     private void StartCapture(CaptureMode mode)
     {
+        if (_isExiting) return;
+
         _lastCaptureMode = mode;
         if (mode == CaptureMode.Fullscreen)
         {
@@ -348,9 +350,10 @@ public partial class MainWindow : Window
             _trayFlyout.UpdateSettings(_settings);
             _trayFlyout.ShowNearCursor();
         }
-        catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+        catch (Exception ex) when (!_isExiting && !Dispatcher.HasShutdownStarted)
         {
-            HideTrayFlyoutSafely();
+            TraceTrayWarning("Tray flyout failed; using the native menu fallback", ex);
+            DiscardTrayFlyout("tray flyout fallback");
             ShowNativeTrayMenu();
         }
     }
@@ -368,8 +371,48 @@ public partial class MainWindow : Window
         {
             if (_trayFlyout?.IsVisible == true) _trayFlyout.Hide();
         }
-        catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+        catch (Exception ex) when (!_isExiting && !Dispatcher.HasShutdownStarted)
         {
+            TraceTrayWarning("Tray flyout hide failed", ex);
+        }
+    }
+
+    private void DiscardTrayFlyout(string reason)
+    {
+        TrayFlyoutWindow? flyout = _trayFlyout;
+        _trayFlyout = null;
+        if (flyout == null) return;
+
+        RunCleanupStep(
+            $"{reason}: failed to unsubscribe the capture event",
+            () => flyout.CaptureRequested -= OnTrayCaptureRequested);
+        RunCleanupStep(
+            $"{reason}: failed to unsubscribe the command event",
+            () => flyout.CommandRequested -= OnTrayCommandRequested);
+        RunCleanupStep($"{reason}: failed to close the window", flyout.Close);
+    }
+
+    private static void RunCleanupStep(string operation, Action cleanup)
+    {
+        try
+        {
+            cleanup();
+        }
+        catch (Exception ex)
+        {
+            TraceTrayWarning(operation, ex);
+        }
+    }
+
+    private static void TraceTrayWarning(string operation, Exception exception)
+    {
+        try
+        {
+            System.Diagnostics.Trace.TraceWarning($"{operation}: {exception}");
+        }
+        catch
+        {
+            // Diagnostics must never interrupt fallback or shutdown cleanup.
         }
     }
 
@@ -410,37 +453,25 @@ public partial class MainWindow : Window
         _nativeTrayMenu = replacement;
         try
         {
-            if (_trayFlyout == null) return;
-
-            try
+            if (_trayFlyout != null)
             {
-                _trayFlyout.UpdateSettings(_settings);
-            }
-            catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
-            {
-                TrayFlyoutWindow failedFlyout = _trayFlyout;
-                _trayFlyout = null;
-                failedFlyout.CaptureRequested -= OnTrayCaptureRequested;
-                failedFlyout.CommandRequested -= OnTrayCommandRequested;
                 try
                 {
-                    failedFlyout.Close();
+                    _trayFlyout.UpdateSettings(_settings);
                 }
-                catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+                catch (Exception ex) when (!_isExiting && !Dispatcher.HasShutdownStarted)
                 {
+                    TraceTrayWarning(
+                        "Tray flyout settings refresh failed; discarding the instance",
+                        ex);
+                    DiscardTrayFlyout("tray flyout settings refresh");
                 }
             }
         }
         finally
         {
-            try
-            {
-                oldMenu.Close();
-            }
-            finally
-            {
-                oldMenu.Dispose();
-            }
+            RunCleanupStep("Failed to close the replaced native tray menu", oldMenu.Close);
+            RunCleanupStep("Failed to dispose the replaced native tray menu", oldMenu.Dispose);
         }
     }
 
@@ -457,6 +488,8 @@ public partial class MainWindow : Window
 
     private void ShowEditor()
     {
+        if (_isExiting) return;
+
         if (_editorWindow != null)
         {
             _editorWindow.Show();
@@ -600,10 +633,6 @@ public partial class MainWindow : Window
         var window = new SettingsWindow(_settingsManager, _hotkeyManager);
         window.Owner = this;
         window.ShowDialog();
-        // 설정 반영 + 단축키 재등록
-        _settings = _settingsManager.Load();
-        RegisterHotkeys();
-        RefreshTrayMenus();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
@@ -698,25 +727,35 @@ public partial class MainWindow : Window
         if (_isExiting) return;
         _isExiting = true;
 
-        _settingsManager.SettingsChanged -= OnExternalSettingsChanged;
-        _trayIcon.DoubleClick -= OnTrayDoubleClick;
-        _trayIcon.MouseUp -= OnTrayMouseUp;
-
-        if (_trayFlyout != null)
+        try
         {
-            _trayFlyout.CaptureRequested -= OnTrayCaptureRequested;
-            _trayFlyout.CommandRequested -= OnTrayCommandRequested;
-            _trayFlyout.Close();
-            _trayFlyout = null;
-        }
+            RunCleanupStep(
+                "Failed to unsubscribe the settings change event",
+                () => _settingsManager.SettingsChanged -= OnExternalSettingsChanged);
+            RunCleanupStep(
+                "Failed to unsubscribe the tray double-click event",
+                () => _trayIcon.DoubleClick -= OnTrayDoubleClick);
+            RunCleanupStep(
+                "Failed to unsubscribe the tray mouse event",
+                () => _trayIcon.MouseUp -= OnTrayMouseUp);
 
-        _nativeTrayMenu.Close();
-        _nativeTrayMenu.Dispose();
-        _editorWindow?.ForceClose();
-        _editorWindow = null;
-        _trayIcon.Visible = false;
-        _trayIcon.Dispose();
-        _hotkeyManager.Dispose();
-        System.Windows.Application.Current.Shutdown();
+            DiscardTrayFlyout("application exit");
+
+            RunCleanupStep("Failed to close the native tray menu", _nativeTrayMenu.Close);
+            RunCleanupStep("Failed to dispose the native tray menu", _nativeTrayMenu.Dispose);
+
+            EditorWindow? editorWindow = _editorWindow;
+            _editorWindow = null;
+            if (editorWindow != null)
+                RunCleanupStep("Failed to close the editor window", editorWindow.ForceClose);
+
+            RunCleanupStep("Failed to hide the tray icon", () => _trayIcon.Visible = false);
+            RunCleanupStep("Failed to dispose the tray icon", _trayIcon.Dispose);
+            RunCleanupStep("Failed to dispose the hotkey manager", _hotkeyManager.Dispose);
+        }
+        finally
+        {
+            System.Windows.Application.Current.Shutdown();
+        }
     }
 }
