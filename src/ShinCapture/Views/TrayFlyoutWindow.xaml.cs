@@ -13,15 +13,15 @@ namespace ShinCapture.Views;
 
 public partial class TrayFlyoutWindow : Window
 {
+    private readonly ObservableCollection<TrayCaptureAction> _secondaryCaptureActions = [];
+
     public event Action<CaptureMode>? CaptureRequested;
     public event Action<TrayMenuCommand>? CommandRequested;
-
-    public ObservableCollection<TrayCaptureAction> SecondaryCaptureActions { get; } = [];
 
     public TrayFlyoutWindow()
     {
         InitializeComponent();
-        SecondaryActions.ItemsSource = SecondaryCaptureActions;
+        SecondaryActions.ItemsSource = _secondaryCaptureActions;
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -32,9 +32,9 @@ public partial class TrayFlyoutWindow : Window
         PrimaryActionHost.Content = actions.Single(action => action.Mode == CaptureMode.Region);
         TranslateActionHost.Content = actions.Single(action => action.Mode == CaptureMode.Translate);
 
-        SecondaryCaptureActions.Clear();
+        _secondaryCaptureActions.Clear();
         foreach (var action in actions.Where(action => !action.IsWide))
-            SecondaryCaptureActions.Add(action);
+            _secondaryCaptureActions.Add(action);
 
         WindowModeText.Text = settings.Editor.WindowSizeMode switch
         {
@@ -57,7 +57,7 @@ public partial class TrayFlyoutWindow : Window
 
     private void OnCommandClick(object sender, RoutedEventArgs e)
     {
-        if (!Enum.TryParse((sender as FrameworkElement)?.Tag?.ToString(), out TrayMenuCommand command))
+        if ((sender as FrameworkElement)?.Tag is not TrayMenuCommand command)
             return;
 
         Hide();
@@ -73,6 +73,22 @@ public partial class TrayFlyoutWindow : Window
 
         Hide();
         e.Handled = true;
+    }
+
+    private void OnActivated(object? sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!IsActive)
+                return;
+            if (Keyboard.FocusedElement is DependencyObject focusedElement &&
+                ReferenceEquals(GetWindow(focusedElement), this))
+            {
+                return;
+            }
+
+            MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+        }), DispatcherPriority.Input);
     }
 
     private void OnDeactivated(object? sender, EventArgs e) => Hide();

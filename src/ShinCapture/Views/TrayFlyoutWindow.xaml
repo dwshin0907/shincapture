@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ShinCapture.Views.Controls"
+        xmlns:models="clr-namespace:ShinCapture.Models"
         Title="신캡쳐 빠른 메뉴"
         Width="392"
         SizeToContent="Height"
@@ -14,9 +15,25 @@
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
         PreviewKeyDown="OnPreviewKeyDown"
+        Activated="OnActivated"
         Deactivated="OnDeactivated">
     <Window.Resources>
         <controls:TrayIconGeometryConverter x:Key="TrayIcon"/>
+
+        <Style x:Key="TrayFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="2"
+                                   RadiusX="8"
+                                   RadiusY="8"
+                                   Stroke="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"
+                                   StrokeThickness="2"
+                                   SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <Style x:Key="TrayTile" TargetType="Button">
             <Setter Property="MinHeight" Value="56"/>
@@ -29,7 +46,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource TrayFocusVisual}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -78,7 +95,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="6,7"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource TrayFocusVisual}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -211,7 +228,7 @@
                     <Separator Margin="0,0,0,9" Background="{DynamicResource DividerBrush}"/>
                     <UniformGrid Columns="2" Margin="0,0,0,8">
                         <Button Style="{StaticResource TrayTile}"
-                                Tag="OpenEditor"
+                                Tag="{x:Static models:TrayMenuCommand.OpenEditor}"
                                 Click="OnCommandClick"
                                 AutomationProperties.Name="편집기 열기">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -222,7 +239,7 @@
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource TrayTile}"
-                                Tag="OpenSaveFolder"
+                                Tag="{x:Static models:TrayMenuCommand.OpenSaveFolder}"
                                 Click="OnCommandClick"
                                 AutomationProperties.Name="저장 폴더 열기">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -242,13 +259,17 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Style="{StaticResource TrayFooterButton}" Content="설정"
-                                Tag="OpenSettings" Click="OnCommandClick" AutomationProperties.Name="환경설정"/>
+                                Tag="{x:Static models:TrayMenuCommand.OpenSettings}"
+                                Click="OnCommandClick" AutomationProperties.Name="환경설정"/>
                         <Button Grid.Column="1" Style="{StaticResource TrayFooterButton}" Content="API 키"
-                                Tag="OpenApiKeyHelp" Click="OnCommandClick" AutomationProperties.Name="API 키 발급 안내"/>
+                                Tag="{x:Static models:TrayMenuCommand.OpenApiKeyHelp}"
+                                Click="OnCommandClick" AutomationProperties.Name="API 키 발급 안내"/>
                         <Button Grid.Column="2" Style="{StaticResource TrayFooterButton}" Content="정보"
-                                Tag="ShowAbout" Click="OnCommandClick" AutomationProperties.Name="신캡쳐 정보"/>
+                                Tag="{x:Static models:TrayMenuCommand.ShowAbout}"
+                                Click="OnCommandClick" AutomationProperties.Name="신캡쳐 정보"/>
                         <Button Grid.Column="3" Style="{StaticResource TrayFooterButton}" Content="종료"
-                                Tag="Exit" Click="OnCommandClick" Foreground="{DynamicResource ErrorBrush}"
+                                Tag="{x:Static models:TrayMenuCommand.Exit}"
+                                Click="OnCommandClick" Foreground="{DynamicResource ErrorBrush}"
                                 AutomationProperties.Name="신캡쳐 종료"/>
                     </Grid>
                 </StackPanel>
