@@ -5,6 +5,15 @@ namespace ShinCapture.Tests.Editor;
 
 public class EditorWindowSizingPolicyTests
 {
+    private static readonly double[] InvalidDimensionValues =
+    [
+        double.NaN,
+        double.PositiveInfinity,
+        double.NegativeInfinity,
+        0,
+        -1
+    ];
+
     [Fact]
     public void KeepsValidRememberedSize()
     {
@@ -22,15 +31,7 @@ public class EditorWindowSizingPolicyTests
     [Fact]
     public void UsesDefaultWidthWhenRememberedWidthIsInvalid()
     {
-        double[] invalidWidths =
-        [
-            double.NaN,
-            double.PositiveInfinity,
-            0,
-            -1
-        ];
-
-        foreach (double width in invalidWidths)
+        foreach (double width in InvalidDimensionValues)
         {
             EditorWindowSize size = EditorWindowSizingPolicy.NormalizeRememberedSize(
                 width,
@@ -41,6 +42,48 @@ public class EditorWindowSizingPolicyTests
             Assert.Equal(EditorWindowSizingPolicy.DefaultWidth, size.Width);
             Assert.Equal(800, size.Height);
             Assert.False(EditorWindowSizingPolicy.IsValidPersistedSize(width, 800));
+        }
+    }
+
+    [Fact]
+    public void UsesDefaultHeightWhenRememberedHeightIsInvalid()
+    {
+        foreach (double height in InvalidDimensionValues)
+        {
+            EditorWindowSize size = EditorWindowSizingPolicy.NormalizeRememberedSize(
+                width: 1200,
+                height,
+                workAreaWidth: 1920,
+                workAreaHeight: 1040);
+
+            Assert.Equal(1200, size.Width);
+            Assert.Equal(EditorWindowSizingPolicy.DefaultHeight, size.Height);
+            Assert.False(EditorWindowSizingPolicy.IsValidPersistedSize(1200, height));
+        }
+    }
+
+    [Fact]
+    public void UsesFiniteDefaultBoundsWhenWorkAreaDimensionsAreInvalid()
+    {
+        foreach (double workAreaDimension in InvalidDimensionValues)
+        {
+            EditorWindowSize widthFallback = EditorWindowSizingPolicy.NormalizeRememberedSize(
+                width: 4000,
+                height: 800,
+                workAreaWidth: workAreaDimension,
+                workAreaHeight: 1040);
+            EditorWindowSize heightFallback = EditorWindowSizingPolicy.NormalizeRememberedSize(
+                width: 1200,
+                height: 3000,
+                workAreaWidth: 1920,
+                workAreaHeight: workAreaDimension);
+
+            Assert.True(double.IsFinite(widthFallback.Width));
+            Assert.Equal(1100, widthFallback.Width);
+            Assert.Equal(800, widthFallback.Height);
+            Assert.True(double.IsFinite(heightFallback.Height));
+            Assert.Equal(1200, heightFallback.Width);
+            Assert.Equal(750, heightFallback.Height);
         }
     }
 
@@ -62,6 +105,45 @@ public class EditorWindowSizingPolicyTests
         Assert.Equal(EditorWindowSizingPolicy.MinimumHeight, belowMinimum.Height);
         Assert.Equal(1366, aboveWorkArea.Width);
         Assert.Equal(728, aboveWorkArea.Height);
+    }
+
+    [Fact]
+    public void ClampsAllRememberedSizesToWorkAreaBelowMinimumSize()
+    {
+        EditorWindowSize belowMinimum = EditorWindowSizingPolicy.NormalizeRememberedSize(
+            width: 200,
+            height: 100,
+            workAreaWidth: 640,
+            workAreaHeight: 480);
+        EditorWindowSize aboveWorkArea = EditorWindowSizingPolicy.NormalizeRememberedSize(
+            width: 4000,
+            height: 3000,
+            workAreaWidth: 640,
+            workAreaHeight: 480);
+
+        Assert.Equal(640, belowMinimum.Width);
+        Assert.Equal(480, belowMinimum.Height);
+        Assert.Equal(640, aboveWorkArea.Width);
+        Assert.Equal(480, aboveWorkArea.Height);
+    }
+
+    [Fact]
+    public void KeepsEditorSettingsDefaultContract()
+    {
+        EditorSettings settings = new();
+
+        Assert.Equal(EditorWindowSizeMode.RememberLast, settings.WindowSizeMode);
+        Assert.Equal(1100, settings.WindowWidth);
+        Assert.Equal(750, settings.WindowHeight);
+    }
+
+    [Fact]
+    public void KeepsSizingPolicyConstantContract()
+    {
+        Assert.Equal(1100, EditorWindowSizingPolicy.DefaultWidth);
+        Assert.Equal(750, EditorWindowSizingPolicy.DefaultHeight);
+        Assert.Equal(760, EditorWindowSizingPolicy.MinimumWidth);
+        Assert.Equal(520, EditorWindowSizingPolicy.MinimumHeight);
     }
 
     [Theory]
