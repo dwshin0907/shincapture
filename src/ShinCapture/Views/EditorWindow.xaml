@@ -7,6 +7,22 @@
         Background="{DynamicResource BackgroundPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
         FontSize="{DynamicResource FontSizeNormal}">
+    <Window.Resources>
+        <Style x:Key="HistoryItemFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="1"
+                                   RadiusX="4" RadiusY="4"
+                                   Stroke="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"
+                                   StrokeThickness="2"
+                                   SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

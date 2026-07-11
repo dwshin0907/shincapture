@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -34,6 +35,7 @@ public partial class EditorWindow : Window
     // 캡쳐 기록 (세션 동안 유지, 최대 50개)
     private static readonly List<BitmapSource> _captureHistory = new();
     private const int MaxHistory = 50;
+    private readonly Dictionary<BitmapSource, Border> _historyCards = new();
 
     /// <summary>편집기에서 새 캡쳐를 요청. (mode, autoTranslate)</summary>
     public event Action<Models.CaptureMode, bool>? CaptureRequested;
@@ -300,7 +302,7 @@ public partial class EditorWindow : Window
     }
 
     /// <summary>기록에서 이미지를 메인 화면에 로드</summary>
-    private void LoadFromHistory(BitmapSource image)
+    private void LoadFromHistory(BitmapSource image, bool focusHistoryItem = false)
     {
         // 현재 편집 상태 저장
         SaveCurrentObjects();
@@ -321,7 +323,21 @@ public partial class EditorWindow : Window
         Canvas.BackgroundImage = _sourceImage;
         Canvas.ApplyInitialZoom();
         BuildHistory();
+        if (focusHistoryItem)
+            ScheduleHistoryFocus(image);
         UpdateStatus();
+    }
+
+    private void ScheduleHistoryFocus(BitmapSource image)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (image != _sourceImage || !_historyCards.TryGetValue(image, out var card))
+                return;
+
+            card.Focus();
+            card.BringIntoView();
+        }), System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void SaveCurrentObjects()
@@ -405,6 +421,15 @@ public partial class EditorWindow : Window
 
     private void OnEditorKeyDown(object sender, KeyEventArgs e)
     {
+        if ((e.Key is Key.Up or Key.Down) && HistoryPanel.IsKeyboardFocusWithin)
+        {
+            if (Keyboard.Modifiers == ModifierKeys.None)
+                NavigateCaptureHistory(e.Key);
+
+            e.Handled = true;
+            return;
+        }
+
         bool inTextBox = e.OriginalSource is TextBox tb && tb.IsFocused && tb.Text?.Length > 0;
 
         // 텍스트 입력 중: Ctrl+C는 선택 텍스트가 있으면 텍스트 복사, 없으면 이미지 복사
@@ -495,6 +520,24 @@ public partial class EditorWindow : Window
             };
             if (toolName != null) { SelectTool(toolName); e.Handled = true; }
         }
+    }
+
+    private void NavigateCaptureHistory(Key key)
+    {
+        BitmapSource currentImage =
+            (Keyboard.FocusedElement as FrameworkElement)?.Tag as BitmapSource
+            ?? _sourceImage;
+        int currentIndex = _captureHistory.IndexOf(currentImage);
+        CaptureHistoryDirection direction = key == Key.Up
+            ? CaptureHistoryDirection.Up
+            : CaptureHistoryDirection.Down;
+        int targetIndex = CaptureHistoryNavigationPolicy.GetTargetIndex(
+            currentIndex,
+            _captureHistory.Count,
+            direction);
+
+        if (targetIndex >= 0 && targetIndex != currentIndex)
+            LoadFromHistory(_captureHistory[targetIndex], focusHistoryItem: true);
     }
 
     private void MoveSelectedByArrow(Key key, bool fine)
@@ -1613,6 +1656,7 @@ public partial class EditorWindow : Window
 
     private void BuildHistory()
     {
+        _historyCards.Clear();
         HistoryPanel.Children.Clear();
         for (int i = 0; i < _captureHistory.Count; i++)
         {
@@ -1624,12 +1668,15 @@ public partial class EditorWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
-                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n좌클릭: 열기 | 우클릭: 복사"
+                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n좌클릭: 열기 | 우클릭: 복사\n↑↓: 이동"
             };
 
             bool isSelected = (img == _sourceImage);
             var border = new Border
             {
+                Tag = img,
+                Focusable = true,
+                FocusVisualStyle = (Style)FindResource("HistoryItemFocusVisual"),
                 Width = 100,
                 Height = 100,
                 Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xF0, 0xF0)),
@@ -1643,12 +1690,19 @@ public partial class EditorWindow : Window
                 ClipToBounds = true,
                 Child = thumb
             };
+            KeyboardNavigation.SetIsTabStop(border, isSelected);
+            AutomationProperties.SetName(
+                border,
+                $"캡처 결과 {i + 1}, {img.PixelWidth} × {img.PixelHeight}");
 
             var localImg = img;
             border.MouseDown += (_, e) =>
             {
                 if (e.ChangedButton == MouseButton.Left)
-                    LoadFromHistory(localImg);
+                {
+                    LoadFromHistory(localImg, focusHistoryItem: true);
+                    e.Handled = true;
+                }
             };
 
             // 우클릭 컨텍스트 메뉴
@@ -1725,6 +1779,7 @@ public partial class EditorWindow : Window
 
             border.ContextMenu = ctx;
 
+            _historyCards[img] = border;
             HistoryPanel.Children.Add(border);
         }
     }
