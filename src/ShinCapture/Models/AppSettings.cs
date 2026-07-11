@@ -8,6 +8,7 @@ public class AppSettings
 {
     public GeneralSettings General { get; set; } = new();
     public CaptureSettings Capture { get; set; } = new();
+    public EditorSettings Editor { get; set; } = new();
     public SaveSettings Save { get; set; } = new();
     public HotkeySettings Hotkeys { get; set; } = new();
     public OcrSettings Ocr { get; set; } = new();
