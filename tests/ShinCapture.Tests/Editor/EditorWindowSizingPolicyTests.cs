@@ -164,6 +164,30 @@ public class EditorWindowSizingPolicyTests
     }
 
     [Theory]
+    [InlineData(900, 240, 660)]
+    [InlineData(900, 0, 900)]
+    [InlineData(900, -20, 900)]
+    [InlineData(900, double.NaN, 900)]
+    [InlineData(900, double.PositiveInfinity, 900)]
+    [InlineData(900, 900, 1)]
+    [InlineData(900, 1200, 1)]
+    [InlineData(double.NaN, 240, 1)]
+    [InlineData(double.PositiveInfinity, 240, 1)]
+    [InlineData(0, 240, 1)]
+    [InlineData(-20, 240, 1)]
+    public void CalculatesSafeHeightBeforeOcr(
+        double currentWindowHeight,
+        double panelHeight,
+        double expected)
+    {
+        Assert.Equal(
+            expected,
+            EditorWindowSizingPolicy.CalculateHeightBeforeOcr(
+                currentWindowHeight,
+                panelHeight));
+    }
+
+    [Theory]
     [InlineData(null, EditorWindowSizeMode.RememberLast, true)]
     [InlineData(EditorWindowSizeMode.Maximized, EditorWindowSizeMode.RememberLast, true)]
     [InlineData(EditorWindowSizeMode.FitToCapture, EditorWindowSizeMode.RememberLast, true)]

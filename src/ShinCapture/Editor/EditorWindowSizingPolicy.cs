@@ -45,6 +45,18 @@ public static class EditorWindowSizingPolicy
     public static bool ShouldGrowForOcr(EditorWindowSizeMode mode) =>
         mode == EditorWindowSizeMode.FitToCapture;
 
+    public static double CalculateHeightBeforeOcr(
+        double currentWindowHeight,
+        double panelHeight)
+    {
+        if (!IsValidDimension(currentWindowHeight))
+            return 1;
+        if (!IsValidDimension(panelHeight))
+            return currentWindowHeight;
+
+        return Math.Max(1, currentWindowHeight - panelHeight);
+    }
+
     public static bool ShouldApplyRememberedSize(
         EditorWindowSizeMode? previous,
         EditorWindowSizeMode current) =>

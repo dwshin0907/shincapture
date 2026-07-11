@@ -7,8 +7,22 @@
         FontFamily="{DynamicResource AppFont}"
         FontSize="{DynamicResource FontSizeNormal}">
     <Window.Resources>
+        <Style x:Key="EditorModeFocusVisual" TargetType="{x:Type Control}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="-2"
+                                   RadiusX="10" RadiusY="10"
+                                   Stroke="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"
+                                   StrokeThickness="2" StrokeDashArray="2 1"
+                                   SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="EditorModeCard" TargetType="{x:Type RadioButton}">
-            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{DynamicResource BackgroundPrimaryBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
@@ -17,7 +31,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Stretch"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource EditorModeFocusVisual}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type RadioButton}">
@@ -33,17 +47,19 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CardBorder" Property="Background" Value="#F5F3FF"/>
+                                <Setter TargetName="CardBorder" Property="Background"
+                                        Value="{DynamicResource BackgroundSecondaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CardBorder" Property="Background" Value="#EEF2FF"/>
+                                <Setter TargetName="CardBorder" Property="Background"
+                                        Value="{DynamicResource ToolbarButtonActiveBrush}"/>
                                 <Setter TargetName="CardBorder" Property="BorderBrush"
                                         Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="CardBorder" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="CardBorder" Property="BorderBrush"
-                                        Value="{DynamicResource AccentBrush}"/>
+                                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
                                 <Setter TargetName="CardBorder" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
@@ -73,7 +89,9 @@
 
             <!-- 캡쳐 탭 -->
             <TabItem Header="캡쳐">
-                <StackPanel Margin="12,16,12,0" VerticalAlignment="Top">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="12,16,12,0" VerticalAlignment="Top">
                     <TextBlock Text="캡쳐 후 동작" Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="{DynamicResource FontSizeSmall}" Margin="0,0,0,4"/>
                     <ComboBox x:Name="CmbAfterCapture" Margin="0,0,0,12">
@@ -99,7 +117,8 @@
                                           StrokeThickness="1.5" StrokeLineJoin="Round"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                                     <Border HorizontalAlignment="Right" VerticalAlignment="Top"
-                                            Background="#EEF2FF" CornerRadius="5" Padding="5,2">
+                                            Background="{DynamicResource ToolbarButtonActiveBrush}"
+                                            CornerRadius="5" Padding="5,2">
                                         <TextBlock Text="권장" Foreground="{DynamicResource AccentBrush}"
                                                    FontSize="10" FontWeight="SemiBold"/>
                                     </Border>
@@ -164,7 +183,8 @@
 
                     <CheckBox x:Name="ChkShowCrosshair" Content="십자선 표시" Margin="0,0,0,8"/>
                     <CheckBox x:Name="ChkShowColorCode" Content="색상 코드 표시" Margin="0,0,0,8"/>
-                </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- 저장 탭 -->

@@ -149,12 +149,25 @@ public partial class EditorWindow : Window
         if (EditorWindowSizingPolicy.ShouldDeferRefresh(IsLoaded, IsVisible))
             return;
 
+        EditorWindowSizeMode? previousMode = _appliedWindowSizeMode;
         UpdateLayout();
-        if (!ApplyWindowSizingPolicy(imageChanged: false))
-            return;
+        bool viewportOrStateChanged = ApplyWindowSizingPolicy(imageChanged: false);
+        UpdateLayout();
 
-        UpdateLayout();
-        Canvas.ApplyInitialZoom();
+        if (previousMode != _appliedWindowSizeMode &&
+            OcrPanel.Visibility == Visibility.Visible)
+        {
+            _editorHeightBeforeOcr =
+                _appliedWindowSizeMode is EditorWindowSizeMode currentMode &&
+                EditorWindowSizingPolicy.ShouldGrowForOcr(currentMode)
+                    ? EditorWindowSizingPolicy.CalculateHeightBeforeOcr(
+                        Height,
+                        OcrPanel.ActualHeight)
+                    : -1;
+        }
+
+        if (viewportOrStateChanged)
+            Canvas.ApplyInitialZoom();
     }
 
     private EditorSettings CurrentEditorSettings() =>
@@ -2158,9 +2171,8 @@ public partial class EditorWindow : Window
         var panelHeight = OcrPanel.ActualHeight;
         if (panelHeight <= 0) return;
         MonitorWorkArea workArea = MonitorWorkAreaService.GetForWindow(this);
-        var maxHeight = workArea.DipHeight - 20;
-        var desired = this.Height + panelHeight;
-        if (desired > maxHeight) desired = maxHeight;
+        var maxHeight = Math.Max(1, workArea.DipHeight - 20);
+        var desired = Math.Clamp(this.Height + panelHeight, 1, maxHeight);
         this.Height = desired;
         UpdateLayout();
         _ = MonitorWorkAreaService.ClampWindowToWorkArea(this);
