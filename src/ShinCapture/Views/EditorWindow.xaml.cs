@@ -135,7 +135,7 @@ public partial class EditorWindow : Window
         Height = Math.Min(Math.Max(desiredH, minH), maxH);
 
         // 화면 중앙 배치
-        MonitorWorkAreaService.CenterWindow(this, workArea);
+        _ = MonitorWorkAreaService.CenterWindow(this, workArea);
     }
 
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>

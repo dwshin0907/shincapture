@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using ShinCapture.Helpers;
 
 namespace ShinCapture.Services;
@@ -43,6 +44,32 @@ public readonly record struct WindowPixelBounds(int Left, int Top, int Width, in
 
 public static class MonitorWorkAreaService
 {
+    public static double ResolveDpiScale(uint nativeDpi, double visualDpiScale)
+    {
+        if (nativeDpi > 0)
+            return nativeDpi / 96.0;
+
+        return double.IsFinite(visualDpiScale) && visualDpiScale > 0
+            ? visualDpiScale
+            : 1.0;
+    }
+
+    public static MonitorWorkArea ConvertDipWorkAreaToPixels(
+        double dipLeft,
+        double dipTop,
+        double dipWidth,
+        double dipHeight,
+        double dpiScale)
+    {
+        double safeScale = ResolveDpiScale(0, dpiScale);
+        return new MonitorWorkArea(
+            ToScaledCoordinate(dipLeft, safeScale),
+            ToScaledCoordinate(dipTop, safeScale),
+            ToScaledSize(dipWidth, safeScale),
+            ToScaledSize(dipHeight, safeScale),
+            safeScale);
+    }
+
     public static WindowPixelBounds CalculateCenteredBounds(
         MonitorWorkArea area,
         double windowDipWidth,
@@ -76,11 +103,14 @@ public static class MonitorWorkAreaService
     {
         ArgumentNullException.ThrowIfNull(window);
 
+        double visualDpiScale = VisualTreeHelper.GetDpi(window).DpiScaleX;
+        double dpiScale = ResolveDpiScale(0, visualDpiScale);
         IntPtr handle = new WindowInteropHelper(window).Handle;
         if (handle != IntPtr.Zero)
         {
             try
             {
+                dpiScale = ResolveDpiScale(NativeMethods.GetDpiForWindow(handle), visualDpiScale);
                 IntPtr monitor = NativeMethods.MonitorFromWindow(
                     handle,
                     NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -94,7 +124,6 @@ public static class MonitorWorkAreaService
                     monitorInfo.rcWork.Width > 0 &&
                     monitorInfo.rcWork.Height > 0)
                 {
-                    double dpiScale = NativeMethods.GetDpiForWindow(handle) / 96.0;
                     return new MonitorWorkArea(
                         monitorInfo.rcWork.Left,
                         monitorInfo.rcWork.Top,
@@ -112,15 +141,15 @@ public static class MonitorWorkAreaService
         }
 
         Rect fallback = SystemParameters.WorkArea;
-        return new MonitorWorkArea(
-            ToFallbackCoordinate(fallback.Left),
-            ToFallbackCoordinate(fallback.Top),
-            ToFallbackSize(fallback.Width),
-            ToFallbackSize(fallback.Height),
-            1.0);
+        return ConvertDipWorkAreaToPixels(
+            fallback.Left,
+            fallback.Top,
+            fallback.Width,
+            fallback.Height,
+            dpiScale);
     }
 
-    public static void CenterWindow(Window window, MonitorWorkArea? area = null)
+    public static bool CenterWindow(Window window, MonitorWorkArea? area = null)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -133,9 +162,52 @@ public static class MonitorWorkAreaService
             height);
         IntPtr handle = new WindowInteropHelper(window).Handle;
 
+        if (TrySetWindowPosition(handle, bounds))
+            return true;
+
+        ApplyCenteredWpfFallback(window, width, height);
+        return false;
+    }
+
+    public static bool ClampWindowToWorkArea(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        IntPtr handle = new WindowInteropHelper(window).Handle;
         if (handle != IntPtr.Zero)
         {
-            NativeMethods.SetWindowPos(
+            try
+            {
+                if (NativeMethods.GetWindowRect(handle, out NativeMethods.RECT rect))
+                {
+                    WindowPixelBounds bounds = ClampBounds(
+                        GetForWindow(window),
+                        new WindowPixelBounds(rect.Left, rect.Top, rect.Width, rect.Height));
+
+                    if (TrySetWindowPosition(handle, bounds))
+                        return true;
+                }
+            }
+            catch (DllNotFoundException)
+            {
+            }
+            catch (EntryPointNotFoundException)
+            {
+            }
+        }
+
+        ApplyClampedWpfFallback(window);
+        return false;
+    }
+
+    private static bool TrySetWindowPosition(IntPtr handle, WindowPixelBounds bounds)
+    {
+        if (handle == IntPtr.Zero)
+            return false;
+
+        try
+        {
+            return NativeMethods.SetWindowPos(
                 handle,
                 IntPtr.Zero,
                 bounds.Left,
@@ -144,28 +216,75 @@ public static class MonitorWorkAreaService
                 bounds.Height,
                 NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
         }
+        catch (DllNotFoundException)
+        {
+            return false;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
     }
 
-    public static void ClampWindowToWorkArea(Window window)
+    private static void ApplyCenteredWpfFallback(Window window, double width, double height)
     {
-        ArgumentNullException.ThrowIfNull(window);
+        Rect workArea = GetSafeDipWorkArea(width, height);
+        double safeWidth = Math.Min(SelectWindowDimension(width, width), workArea.Width);
+        double safeHeight = Math.Min(SelectWindowDimension(height, height), workArea.Height);
 
-        IntPtr handle = new WindowInteropHelper(window).Handle;
-        if (handle == IntPtr.Zero || !NativeMethods.GetWindowRect(handle, out NativeMethods.RECT rect))
-            return;
+        ApplyWpfBounds(
+            window,
+            workArea.Left + ((workArea.Width - safeWidth) / 2),
+            workArea.Top + ((workArea.Height - safeHeight) / 2),
+            safeWidth,
+            safeHeight);
+    }
 
-        WindowPixelBounds bounds = ClampBounds(
-            GetForWindow(window),
-            new WindowPixelBounds(rect.Left, rect.Top, rect.Width, rect.Height));
+    private static void ApplyClampedWpfFallback(Window window)
+    {
+        window.UpdateLayout();
+        double width = SelectWindowDimension(window.ActualWidth, window.Width);
+        double height = SelectWindowDimension(window.ActualHeight, window.Height);
+        Rect workArea = GetSafeDipWorkArea(width, height);
+        double safeWidth = Math.Min(width, workArea.Width);
+        double safeHeight = Math.Min(height, workArea.Height);
+        double left = double.IsFinite(window.Left) ? window.Left : workArea.Left;
+        double top = double.IsFinite(window.Top) ? window.Top : workArea.Top;
 
-        NativeMethods.SetWindowPos(
-            handle,
-            IntPtr.Zero,
-            bounds.Left,
-            bounds.Top,
-            bounds.Width,
-            bounds.Height,
-            NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+        ApplyWpfBounds(
+            window,
+            Math.Clamp(left, workArea.Left, workArea.Right - safeWidth),
+            Math.Clamp(top, workArea.Top, workArea.Bottom - safeHeight),
+            safeWidth,
+            safeHeight);
+    }
+
+    private static void ApplyWpfBounds(
+        Window window,
+        double left,
+        double top,
+        double width,
+        double height)
+    {
+        window.Width = width;
+        window.Height = height;
+        window.Left = left;
+        window.Top = top;
+    }
+
+    private static Rect GetSafeDipWorkArea(double fallbackWidth, double fallbackHeight)
+    {
+        Rect workArea = SystemParameters.WorkArea;
+        double left = double.IsFinite(workArea.Left) ? workArea.Left : 0;
+        double top = double.IsFinite(workArea.Top) ? workArea.Top : 0;
+        double width = double.IsFinite(workArea.Width) && workArea.Width > 0
+            ? workArea.Width
+            : SelectWindowDimension(fallbackWidth, fallbackWidth);
+        double height = double.IsFinite(workArea.Height) && workArea.Height > 0
+            ? workArea.Height
+            : SelectWindowDimension(fallbackHeight, fallbackHeight);
+
+        return new Rect(left, top, width, height);
     }
 
     private static int ToPhysicalSize(double dipSize, double dpiScale, int maximum)
@@ -183,9 +302,23 @@ public static class MonitorWorkAreaService
         return double.IsFinite(requested) && requested > 0 ? requested : 1.0;
     }
 
-    private static int ToFallbackCoordinate(double value) =>
-        double.IsFinite(value) ? (int)Math.Round(value) : 0;
+    private static int ToScaledCoordinate(double dipValue, double dpiScale) =>
+        ToRoundedInt(dipValue * dpiScale, fallback: 0);
 
-    private static int ToFallbackSize(double value) =>
-        double.IsFinite(value) && value > 0 ? Math.Max(1, (int)Math.Round(value)) : 1;
+    private static int ToScaledSize(double dipValue, double dpiScale) =>
+        Math.Max(1, ToRoundedInt(dipValue * dpiScale, fallback: 1));
+
+    private static int ToRoundedInt(double value, int fallback)
+    {
+        if (!double.IsFinite(value))
+            return fallback;
+
+        double rounded = Math.Round(value);
+        if (rounded >= int.MaxValue)
+            return int.MaxValue;
+        if (rounded <= int.MinValue)
+            return int.MinValue;
+
+        return (int)rounded;
+    }
 }
