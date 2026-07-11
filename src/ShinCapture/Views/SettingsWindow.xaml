@@ -6,6 +6,56 @@
         Background="{DynamicResource BackgroundPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
         FontSize="{DynamicResource FontSizeNormal}">
+    <Window.Resources>
+        <Style x:Key="EditorModeCard" TargetType="{x:Type RadioButton}">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="MinHeight" Value="104"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RadioButton}">
+                        <Border x:Name="CardBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#F5F3FF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#EEF2FF"/>
+                                <Setter TargetName="CardBorder" Property="BorderBrush"
+                                        Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="CardBorder" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush"
+                                        Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="CardBorder" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="CardBorder" Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -26,15 +76,80 @@
                 <StackPanel Margin="12,16,12,0" VerticalAlignment="Top">
                     <TextBlock Text="캡쳐 후 동작" Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="{DynamicResource FontSizeSmall}" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="CmbAfterCapture" Margin="0,0,0,16">
+                    <ComboBox x:Name="CmbAfterCapture" Margin="0,0,0,12">
                         <ComboBoxItem Content="편집기 열기" Tag="OpenEditor"/>
                         <ComboBoxItem Content="바로 저장" Tag="SaveDirectly"/>
                         <ComboBoxItem Content="클립보드만" Tag="ClipboardOnly"/>
                     </ComboBox>
 
+                    <TextBlock Text="편집기 창 크기" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,2"/>
+                    <TextBlock Text="새 캡처를 열 때 편집기 창이 어떻게 유지될지 정합니다."
+                               Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <UniformGrid Columns="3" Rows="1" Margin="0,0,0,12">
+                        <RadioButton x:Name="RbEditorRemember" GroupName="EditorWindowSizeMode"
+                                     Style="{StaticResource EditorModeCard}" Margin="0,0,4,0"
+                                     AutomationProperties.Name="마지막 크기">
+                            <StackPanel>
+                                <Grid Height="26">
+                                    <Path Width="30" Height="24" HorizontalAlignment="Left"
+                                          Data="M 2,3 L 26,3 L 26,21 L 2,21 Z M 2,8 L 26,8 M 18,14 L 23,19 M 19,19 L 23,19 L 23,15"
+                                          Stretch="Uniform" Stroke="{DynamicResource AccentBrush}"
+                                          StrokeThickness="1.5" StrokeLineJoin="Round"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                            Background="#EEF2FF" CornerRadius="5" Padding="5,2">
+                                        <TextBlock Text="권장" Foreground="{DynamicResource AccentBrush}"
+                                                   FontSize="10" FontWeight="SemiBold"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="마지막 크기" FontWeight="SemiBold" FontSize="13"
+                                           Margin="0,7,0,2"/>
+                                <TextBlock Text="내가 조절한 창 크기" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="RbEditorMaximized" GroupName="EditorWindowSizeMode"
+                                     Style="{StaticResource EditorModeCard}" Margin="2,0"
+                                     AutomationProperties.Name="최대화">
+                            <StackPanel>
+                                <Path Width="30" Height="24" HorizontalAlignment="Left"
+                                      Data="M 2,3 L 26,3 L 26,21 L 2,21 Z M 2,8 L 26,8 M 6,11 L 22,11 L 22,18 L 6,18 Z"
+                                      Stretch="Uniform" Stroke="{DynamicResource AccentBrush}"
+                                      StrokeThickness="1.5" StrokeLineJoin="Round"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                <TextBlock Text="최대화" FontWeight="SemiBold" FontSize="13"
+                                           Margin="0,9,0,2"/>
+                                <TextBlock Text="작업 표시줄은 유지" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="RbEditorFit" GroupName="EditorWindowSizeMode"
+                                     Style="{StaticResource EditorModeCard}" Margin="4,0,0,0"
+                                     AutomationProperties.Name="이미지 맞춤">
+                            <StackPanel>
+                                <Path Width="30" Height="24" HorizontalAlignment="Left"
+                                      Data="M 2,3 L 26,3 L 26,21 L 2,21 Z M 2,8 L 26,8 M 7,12 L 11,12 L 11,16 M 7,12 L 7,16 M 21,12 L 17,12 L 17,16 M 21,12 L 21,16"
+                                      Stretch="Uniform" Stroke="{DynamicResource AccentBrush}"
+                                      StrokeThickness="1.5" StrokeLineJoin="Round"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                <TextBlock Text="이미지 맞춤" FontWeight="SemiBold" FontSize="13"
+                                           Margin="0,9,0,2"/>
+                                <TextBlock Text="캡처마다 자동 조절" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </RadioButton>
+                    </UniformGrid>
+
                     <TextBlock Text="돋보기 배율" Foreground="{DynamicResource TextSecondaryBrush}"
                                FontSize="{DynamicResource FontSizeSmall}" Margin="0,0,0,4"/>
-                    <Grid Margin="0,0,0,16">
+                    <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="30"/>
@@ -47,8 +162,8 @@
                                    HorizontalAlignment="Right"/>
                     </Grid>
 
-                    <CheckBox x:Name="ChkShowCrosshair" Content="십자선 표시" Margin="0,0,0,12"/>
-                    <CheckBox x:Name="ChkShowColorCode" Content="색상 코드 표시" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ChkShowCrosshair" Content="십자선 표시" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="ChkShowColorCode" Content="색상 코드 표시" Margin="0,0,0,8"/>
                 </StackPanel>
             </TabItem>
 

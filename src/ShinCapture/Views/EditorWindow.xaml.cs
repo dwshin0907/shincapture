@@ -2123,6 +2123,16 @@ public partial class EditorWindow : Window
     private void OnOcrPanelVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.NewValue is not bool isVisible) return;
+
+        EditorWindowSizeMode mode = CurrentEditorSettings().WindowSizeMode;
+        if (!EditorWindowSizingPolicy.ShouldGrowForOcr(mode))
+        {
+            _editorHeightBeforeOcr = -1;
+            if (isVisible)
+                RefreshOcrBanner();
+            return;
+        }
+
         if (isVisible)
         {
             RefreshOcrBanner();
@@ -2147,14 +2157,13 @@ public partial class EditorWindow : Window
     {
         var panelHeight = OcrPanel.ActualHeight;
         if (panelHeight <= 0) return;
-        var workArea = System.Windows.SystemParameters.WorkArea;
-        var maxHeight = workArea.Height - 20;
+        MonitorWorkArea workArea = MonitorWorkAreaService.GetForWindow(this);
+        var maxHeight = workArea.DipHeight - 20;
         var desired = this.Height + panelHeight;
         if (desired > maxHeight) desired = maxHeight;
         this.Height = desired;
-        // 화면 밖으로 안 나가게 위치 조정
-        if (this.Top + this.Height > workArea.Bottom)
-            this.Top = Math.Max(workArea.Top, workArea.Bottom - this.Height);
+        UpdateLayout();
+        _ = MonitorWorkAreaService.ClampWindowToWorkArea(this);
     }
 
     private void OnOcrSelectAll(object sender, RoutedEventArgs e)

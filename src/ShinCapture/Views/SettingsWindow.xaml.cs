@@ -91,6 +91,18 @@ public partial class SettingsWindow : Window
             AfterCaptureAction.ClipboardOnly => "ClipboardOnly",
             _ => "OpenEditor"
         });
+        switch (_settings.Editor.WindowSizeMode)
+        {
+            case EditorWindowSizeMode.Maximized:
+                RbEditorMaximized.IsChecked = true;
+                break;
+            case EditorWindowSizeMode.FitToCapture:
+                RbEditorFit.IsChecked = true;
+                break;
+            default:
+                RbEditorRemember.IsChecked = true;
+                break;
+        }
         SldMagnifierZoom.Value = _settings.Capture.MagnifierZoom;
         ChkShowCrosshair.IsChecked = _settings.Capture.ShowCrosshair;
         ChkShowColorCode.IsChecked = _settings.Capture.ShowColorCode;
@@ -178,6 +190,11 @@ public partial class SettingsWindow : Window
             "ClipboardOnly" => AfterCaptureAction.ClipboardOnly,
             _               => AfterCaptureAction.OpenEditor
         };
+        _settings.Editor.WindowSizeMode = RbEditorMaximized.IsChecked == true
+            ? EditorWindowSizeMode.Maximized
+            : RbEditorFit.IsChecked == true
+                ? EditorWindowSizeMode.FitToCapture
+                : EditorWindowSizeMode.RememberLast;
         _settings.Capture.MagnifierZoom  = (int)SldMagnifierZoom.Value;
         _settings.Capture.ShowCrosshair  = ChkShowCrosshair.IsChecked == true;
         _settings.Capture.ShowColorCode  = ChkShowColorCode.IsChecked == true;
