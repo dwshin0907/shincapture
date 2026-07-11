@@ -17,9 +17,12 @@ public partial class MainWindow : Window
     private readonly HotkeyManager _hotkeyManager;
     private readonly SettingsManager _settingsManager;
     private readonly SaveManager _saveManager;
+    private System.Windows.Forms.ContextMenuStrip _nativeTrayMenu;
+    private TrayFlyoutWindow? _trayFlyout;
     private AppSettings _settings;
     private CaptureMode _lastCaptureMode = CaptureMode.Region;
     private bool _editorAutoTranslate;
+    private bool _isExiting;
 
     public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
@@ -29,6 +32,7 @@ public partial class MainWindow : Window
         _settings = settingsManager.Load();
         _hotkeyManager = new HotkeyManager();
         _settingsManager.SettingsChanged += OnExternalSettingsChanged;
+        _nativeTrayMenu = BuildNativeTrayMenu();
 
         Icon? trayIcon = null;
         try
@@ -44,10 +48,10 @@ public partial class MainWindow : Window
         {
             Icon = trayIcon,
             Text = "신캡쳐",
-            Visible = true,
-            ContextMenuStrip = BuildTrayMenu()
+            Visible = true
         };
-        _trayIcon.DoubleClick += (_, _) => ShowEditor();
+        _trayIcon.DoubleClick += OnTrayDoubleClick;
+        _trayIcon.MouseUp += OnTrayMouseUp;
 
         Loaded += OnLoaded;
         Closing += OnClosing;
@@ -276,31 +280,168 @@ public partial class MainWindow : Window
         }
     }
 
-    private ContextMenuStrip BuildTrayMenu()
+    private System.Windows.Forms.ContextMenuStrip BuildNativeTrayMenu()
     {
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("✏ 영역지정 캡쳐\tPrtSc / Ctrl+Shift+C", null, (_, _) => StartCapture(CaptureMode.Region));
-        menu.Items.Add("✧ 자유형 캡쳐\tCtrl+Shift+F", null, (_, _) => StartCapture(CaptureMode.Freeform));
-        menu.Items.Add("☐ 창 캡쳐\tCtrl+Shift+W", null, (_, _) => StartCapture(CaptureMode.Window));
-        menu.Items.Add("◫ 단위영역 캡쳐\tCtrl+Shift+D", null, (_, _) => StartCapture(CaptureMode.Element));
-        menu.Items.Add("⊡ 전체화면 캡쳐\tCtrl+Shift+A", null, (_, _) => StartCapture(CaptureMode.Fullscreen));
-        menu.Items.Add("↕ 스크롤 캡쳐\tCtrl+Shift+S", null, (_, _) => StartCapture(CaptureMode.Scroll));
-        menu.Items.Add("⊞ 지정사이즈 캡쳐\tCtrl+Shift+Z", null, (_, _) => StartCapture(CaptureMode.FixedSize));
-        menu.Items.Add("🔤 텍스트 캡쳐\tCtrl+Shift+T", null, (_, _) => StartCapture(CaptureMode.Text));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("✏ 편집기 열기", null, (_, _) => ShowEditor());
-        menu.Items.Add("📁 저장 폴더 열기", null, (_, _) => OpenSaveFolder());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("⚙︎ 환경설정", null, (_, _) => OpenSettings());
-        menu.Items.Add("ℹ 신캡쳐 정보", null, (_, _) => ShowAbout());
-        menu.Items.Add("🔑 API 키 발급 안내", null, (_, _) =>
+        var menu = new System.Windows.Forms.ContextMenuStrip
         {
-            var win = new Views.ApiKeyHelpWindow(_settingsManager);
-            win.ShowDialog();
-        });
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("✕ 종료", null, (_, _) => ExitApplication());
+            ShowImageMargin = false,
+            ShowCheckMargin = false,
+            Renderer = new System.Windows.Forms.ToolStripSystemRenderer()
+        };
+
+        foreach (TrayCaptureAction action in TrayMenuCatalog.CreateCaptureActions(_settings.Hotkeys))
+        {
+            var item = new System.Windows.Forms.ToolStripMenuItem(action.Label)
+            {
+                ShortcutKeyDisplayString = action.Shortcut
+            };
+            CaptureMode mode = action.Mode;
+            item.Click += (_, _) =>
+            {
+                if (!_isExiting) StartCapture(mode);
+            };
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("편집기 열기", null, (_, _) => ShowEditor());
+        menu.Items.Add("저장 폴더 열기", null, (_, _) => OpenSaveFolder());
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("환경설정", null, (_, _) => OpenSettings());
+        menu.Items.Add("API 키 발급 안내", null, (_, _) => OpenApiKeyHelp());
+        menu.Items.Add("신캡쳐 정보", null, (_, _) => ShowAbout());
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("종료", null, (_, _) => ExitApplication());
         return menu;
+    }
+
+    private void OnTrayDoubleClick(object? sender, EventArgs e)
+    {
+        if (!_isExiting) ShowEditor();
+    }
+
+    private void OnTrayMouseUp(object? sender, System.Windows.Forms.MouseEventArgs e)
+    {
+        if (_isExiting || e.Button != System.Windows.Forms.MouseButtons.Right) return;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!_isExiting) ShowTrayFlyout();
+        }));
+    }
+
+    private void ShowTrayFlyout()
+    {
+        if (_isExiting || Dispatcher.HasShutdownStarted) return;
+
+        if (System.Windows.SystemParameters.HighContrast)
+        {
+            HideTrayFlyoutSafely();
+            ShowNativeTrayMenu();
+            return;
+        }
+
+        try
+        {
+            _nativeTrayMenu.Close();
+            _trayFlyout ??= CreateTrayFlyout();
+            _trayFlyout.UpdateSettings(_settings);
+            _trayFlyout.ShowNearCursor();
+        }
+        catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+        {
+            HideTrayFlyoutSafely();
+            ShowNativeTrayMenu();
+        }
+    }
+
+    private void ShowNativeTrayMenu()
+    {
+        if (_isExiting || Dispatcher.HasShutdownStarted) return;
+
+        _nativeTrayMenu.Show(System.Windows.Forms.Cursor.Position);
+    }
+
+    private void HideTrayFlyoutSafely()
+    {
+        try
+        {
+            if (_trayFlyout?.IsVisible == true) _trayFlyout.Hide();
+        }
+        catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+        {
+        }
+    }
+
+    private TrayFlyoutWindow CreateTrayFlyout()
+    {
+        var flyout = new TrayFlyoutWindow();
+        flyout.CaptureRequested += OnTrayCaptureRequested;
+        flyout.CommandRequested += OnTrayCommandRequested;
+        return flyout;
+    }
+
+    private void OnTrayCaptureRequested(CaptureMode mode)
+    {
+        if (!_isExiting) StartCapture(mode);
+    }
+
+    private void OnTrayCommandRequested(TrayMenuCommand command)
+    {
+        if (_isExiting) return;
+
+        switch (command)
+        {
+            case TrayMenuCommand.OpenEditor: ShowEditor(); break;
+            case TrayMenuCommand.OpenSaveFolder: OpenSaveFolder(); break;
+            case TrayMenuCommand.OpenSettings: OpenSettings(); break;
+            case TrayMenuCommand.OpenApiKeyHelp: OpenApiKeyHelp(); break;
+            case TrayMenuCommand.ShowAbout: ShowAbout(); break;
+            case TrayMenuCommand.Exit: ExitApplication(); break;
+        }
+    }
+
+    private void RefreshTrayMenus()
+    {
+        if (_isExiting) return;
+
+        System.Windows.Forms.ContextMenuStrip replacement = BuildNativeTrayMenu();
+        System.Windows.Forms.ContextMenuStrip oldMenu = _nativeTrayMenu;
+        _nativeTrayMenu = replacement;
+        try
+        {
+            if (_trayFlyout == null) return;
+
+            try
+            {
+                _trayFlyout.UpdateSettings(_settings);
+            }
+            catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+            {
+                TrayFlyoutWindow failedFlyout = _trayFlyout;
+                _trayFlyout = null;
+                failedFlyout.CaptureRequested -= OnTrayCaptureRequested;
+                failedFlyout.CommandRequested -= OnTrayCommandRequested;
+                try
+                {
+                    failedFlyout.Close();
+                }
+                catch (Exception) when (!_isExiting && !Dispatcher.HasShutdownStarted)
+                {
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                oldMenu.Close();
+            }
+            finally
+            {
+                oldMenu.Dispose();
+            }
+        }
     }
 
     private void ToggleMainWindow()
@@ -311,7 +452,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (_settings.General.MinimizeToTray) { e.Cancel = true; Hide(); }
+        if (!_isExiting && _settings.General.MinimizeToTray) { e.Cancel = true; Hide(); }
     }
 
     private void ShowEditor()
@@ -342,6 +483,12 @@ public partial class MainWindow : Window
         var path = _settings.Save.AutoSavePath;
         if (!System.IO.Directory.Exists(path)) System.IO.Directory.CreateDirectory(path);
         System.Diagnostics.Process.Start("explorer.exe", path);
+    }
+
+    private void OpenApiKeyHelp()
+    {
+        var win = new ApiKeyHelpWindow(_settingsManager);
+        win.ShowDialog();
     }
 
     private void ShowAbout()
@@ -456,6 +603,7 @@ public partial class MainWindow : Window
         // 설정 반영 + 단축키 재등록
         _settings = _settingsManager.Load();
         RegisterHotkeys();
+        RefreshTrayMenus();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
@@ -527,16 +675,43 @@ public partial class MainWindow : Window
     {
         // SettingsManager.Save() raises this event after persisting to disk.
         // Marshal to UI thread (event source thread is whoever called Save).
-        Dispatcher.Invoke(() =>
+        if (_isExiting || Dispatcher.HasShutdownStarted) return;
+
+        void ApplySettings()
         {
+            if (_isExiting || Dispatcher.HasShutdownStarted) return;
+
             _settings = _settingsManager.Load();
             _editorWindow?.RefreshWindowSizingPolicy();
             RegisterHotkeys();
-        });
+            RefreshTrayMenus();
+        }
+
+        if (Dispatcher.CheckAccess())
+            ApplySettings();
+        else
+            Dispatcher.BeginInvoke(new Action(ApplySettings));
     }
 
     private void ExitApplication()
     {
+        if (_isExiting) return;
+        _isExiting = true;
+
+        _settingsManager.SettingsChanged -= OnExternalSettingsChanged;
+        _trayIcon.DoubleClick -= OnTrayDoubleClick;
+        _trayIcon.MouseUp -= OnTrayMouseUp;
+
+        if (_trayFlyout != null)
+        {
+            _trayFlyout.CaptureRequested -= OnTrayCaptureRequested;
+            _trayFlyout.CommandRequested -= OnTrayCommandRequested;
+            _trayFlyout.Close();
+            _trayFlyout = null;
+        }
+
+        _nativeTrayMenu.Close();
+        _nativeTrayMenu.Dispose();
         _editorWindow?.ForceClose();
         _editorWindow = null;
         _trayIcon.Visible = false;
