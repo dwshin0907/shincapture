@@ -10,6 +10,7 @@ public static class TrayFlyoutPositioner
 {
     public const int Margin = 8;
     public const int CursorGap = 10;
+    public const int CursorHorizontalOffset = 20;
 
     public static WindowPixelBounds Calculate(
         PixelPoint cursor,
@@ -29,13 +30,18 @@ public static class TrayFlyoutPositioner
         long usableTop = (long)workArea.PixelTop + verticalMargin;
         long maxLeft = usableLeft + availableWidth - width;
         long maxTop = usableTop + availableHeight - height;
-        long left = Math.Clamp((long)cursor.X - width + 20, usableLeft, maxLeft);
+        long left = Math.Clamp(
+            (long)cursor.X - width + CursorHorizontalOffset,
+            usableLeft,
+            maxLeft);
         long top = (long)cursor.Y + CursorGap;
 
         if (top + height > usableTop + availableHeight)
             top = (long)cursor.Y - CursorGap - height;
 
         top = Math.Clamp(top, usableTop, maxTop);
+        left = Math.Clamp(left, int.MinValue, (long)int.MaxValue - width);
+        top = Math.Clamp(top, int.MinValue, (long)int.MaxValue - height);
         return new WindowPixelBounds((int)left, (int)top, width, height);
     }
 }

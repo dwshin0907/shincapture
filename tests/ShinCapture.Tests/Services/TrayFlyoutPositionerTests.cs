@@ -98,4 +98,56 @@ public class TrayFlyoutPositionerTests
             Assert.True(bounds.Bottom <= workArea.PixelTop + workHeight);
         }
     }
+
+    [Fact]
+    public void SaturatesCoordinatesForExtremeWorkAreaOrigins()
+    {
+        (MonitorWorkArea WorkArea, PixelPoint Cursor, bool ExpectNonNegative)[] cases =
+        [
+            (
+                new MonitorWorkArea(int.MaxValue - 2, int.MaxValue - 3, 100, 120, 1.0),
+                new PixelPoint(int.MaxValue, int.MaxValue),
+                true),
+            (
+                new MonitorWorkArea(int.MinValue, int.MinValue, 100, 120, 1.0),
+                new PixelPoint(int.MinValue, int.MinValue),
+                false)
+        ];
+
+        foreach ((MonitorWorkArea workArea, PixelPoint cursor, bool expectNonNegative) in cases)
+        {
+            WindowPixelBounds bounds = TrayFlyoutPositioner.Calculate(
+                cursor,
+                workArea,
+                new PixelSize(20, 30));
+
+            Assert.InRange((long)bounds.Left, int.MinValue, int.MaxValue - (long)bounds.Width);
+            Assert.InRange((long)bounds.Top, int.MinValue, int.MaxValue - (long)bounds.Height);
+            Assert.True((long)bounds.Left + bounds.Width <= int.MaxValue);
+            Assert.True((long)bounds.Top + bounds.Height <= int.MaxValue);
+            Assert.True((long)bounds.Left >= int.MinValue);
+            Assert.True((long)bounds.Top >= int.MinValue);
+            if (expectNonNegative)
+            {
+                Assert.True(bounds.Left >= 0);
+                Assert.True(bounds.Top >= 0);
+            }
+        }
+    }
+
+    [Fact]
+    public void AnchorsFlyoutUsingCursorHorizontalOffsetWhenClampIsNotNeeded()
+    {
+        PixelPoint cursor = new(1000, 100);
+        PixelSize flyout = new(380, 200);
+
+        WindowPixelBounds bounds = TrayFlyoutPositioner.Calculate(
+            cursor,
+            new MonitorWorkArea(0, 0, 1920, 1040, 1.0),
+            flyout);
+
+        Assert.Equal(
+            cursor.X - flyout.Width + TrayFlyoutPositioner.CursorHorizontalOffset,
+            bounds.Left);
+    }
 }
