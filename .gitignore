@@ -4,6 +4,7 @@ obj/
 *.suo
 .vs/
 .superpowers/
+.worktrees/
 publish/
 개발일지/
 
