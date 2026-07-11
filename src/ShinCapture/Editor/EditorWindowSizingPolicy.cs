@@ -51,6 +51,9 @@ public static class EditorWindowSizingPolicy
         current == EditorWindowSizeMode.RememberLast &&
         previous != EditorWindowSizeMode.RememberLast;
 
+    public static bool ShouldDeferRefresh(bool isLoaded, bool isVisible) =>
+        !isLoaded || !isVisible;
+
     private static bool IsValidDimension(double value) =>
         double.IsFinite(value) && value > 0;
 }

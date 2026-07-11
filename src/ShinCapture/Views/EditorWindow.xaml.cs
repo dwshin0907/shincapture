@@ -146,7 +146,11 @@ public partial class EditorWindow : Window
 
     public void RefreshWindowSizingPolicy()
     {
-        if (!IsLoaded || !ApplyWindowSizingPolicy(imageChanged: false))
+        if (EditorWindowSizingPolicy.ShouldDeferRefresh(IsLoaded, IsVisible))
+            return;
+
+        UpdateLayout();
+        if (!ApplyWindowSizingPolicy(imageChanged: false))
             return;
 
         UpdateLayout();

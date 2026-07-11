@@ -181,4 +181,19 @@ public class EditorWindowSizingPolicyTests
             expected,
             EditorWindowSizingPolicy.ShouldApplyRememberedSize(previous, current));
     }
+
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void DefersRefreshUntilWindowIsLoadedAndVisible(
+        bool isLoaded,
+        bool isVisible,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            EditorWindowSizingPolicy.ShouldDeferRefresh(isLoaded, isVisible));
+    }
 }
