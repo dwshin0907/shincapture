@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ShinCapture.Models;
 using ShinCapture.Services;
 
@@ -116,6 +117,106 @@ public class SettingsManagerTests : IDisposable
     }
 
     [Fact]
+    public void Update_WhenExistingJsonIsCorrupted_ThrowsAndPreservesFileAndEvent()
+    {
+        var filePath = Path.Combine(_tempDir, "settings.json");
+        const string corruptedJson = "NOT VALID JSON {{{";
+        File.WriteAllText(filePath, corruptedJson);
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+
+        Assert.Throws<JsonException>(() =>
+            _manager.Update(settings => settings.General.AutoStart = true));
+
+        Assert.Equal(corruptedJson, File.ReadAllText(filePath));
+        Assert.Equal(0, eventCount);
+    }
+
+    [Fact]
+    public void Update_WhenCallbackThrows_PreservesFileSettingsAndEvent()
+    {
+        var settings = _manager.Load();
+        settings.General.AutoStart = false;
+        _manager.Save(settings);
+        var filePath = Path.Combine(_tempDir, "settings.json");
+        var originalJson = File.ReadAllText(filePath);
+        var expectedException = new InvalidOperationException("Callback failed.");
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            _manager.Update(current =>
+            {
+                current.General.AutoStart = true;
+                throw expectedException;
+            }));
+
+        Assert.Same(expectedException, exception);
+        Assert.Equal(originalJson, File.ReadAllText(filePath));
+        Assert.False(_manager.Load().General.AutoStart);
+        Assert.Equal(0, eventCount);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Update_WhenCallbackReentersMutation_ThrowsAndPreservesFileAndEvent(bool useSave)
+    {
+        var settings = _manager.Load();
+        settings.General.AutoStart = false;
+        _manager.Save(settings);
+        var filePath = Path.Combine(_tempDir, "settings.json");
+        var originalJson = File.ReadAllText(filePath);
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            _manager.Update(current =>
+            {
+                current.Editor.WindowWidth = 1234;
+                if (useSave)
+                {
+                    _manager.Save(current);
+                }
+                else
+                {
+                    _manager.Update(nested => nested.General.AutoStart = true);
+                }
+            }));
+
+        Assert.Equal(originalJson, File.ReadAllText(filePath));
+        Assert.False(_manager.Load().General.AutoStart);
+        Assert.Equal(0, eventCount);
+    }
+
+    [Fact]
+    public void Update_WithNullCallback_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => _manager.Update(null!));
+    }
+
+    [Fact]
+    public void Update_ConcurrentSilentIncrements_DoesNotLoseChanges()
+    {
+        var settings = _manager.Load();
+        settings.RecentCaptures.MaxCount = 0;
+        _manager.Save(settings);
+        var eventCount = 0;
+        _manager.SettingsChanged += (_, _) => eventCount++;
+        const int updateCount = 32;
+
+        Parallel.For(
+            0,
+            updateCount,
+            _ => _manager.Update(
+                current => current.RecentCaptures.MaxCount++,
+                raiseChanged: false));
+
+        Assert.Equal(updateCount, _manager.Load().RecentCaptures.MaxCount);
+        Assert.Equal(0, eventCount);
+    }
+
+    [Fact]
     public void Save_CreatesJsonFile()
     {
         var settings = _manager.Load();
@@ -125,6 +226,13 @@ public class SettingsManagerTests : IDisposable
         var json = File.ReadAllText(filePath);
         Assert.Contains("general", json);
         Assert.Contains("hotkeys", json);
+    }
+
+    [Fact]
+    public void Save_WithNullSettings_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => _manager.Save(null!));
+        Assert.False(File.Exists(Path.Combine(_tempDir, "settings.json")));
     }
 
     [Fact]
@@ -142,6 +250,44 @@ public class SettingsManagerTests : IDisposable
         File.WriteAllText(Path.Combine(_tempDir, "settings.json"), "NOT VALID JSON {{{");
         var settings = _manager.Load();
         Assert.Equal("ko", settings.General.Language);
+    }
+
+    [Fact]
+    public void Load_WithExplicitNullObjectSections_NormalizesDefaults()
+    {
+        File.WriteAllText(
+            Path.Combine(_tempDir, "settings.json"),
+            """
+            {
+              "general": null,
+              "capture": null,
+              "editor": null,
+              "save": null,
+              "hotkeys": null,
+              "ocr": null,
+              "ai": null,
+              "recentCaptures": null
+            }
+            """);
+
+        var loaded = _manager.Load();
+
+        Assert.NotNull(loaded.General);
+        Assert.NotNull(loaded.Capture);
+        Assert.NotNull(loaded.Editor);
+        Assert.NotNull(loaded.Save);
+        Assert.NotNull(loaded.Hotkeys);
+        Assert.NotNull(loaded.Ocr);
+        Assert.NotNull(loaded.Ai);
+        Assert.NotNull(loaded.RecentCaptures);
+        Assert.Equal("ko", loaded.General.Language);
+        Assert.Equal(AfterCaptureAction.OpenEditor, loaded.Capture.AfterCapture);
+        Assert.Equal(EditorWindowSizeMode.RememberLast, loaded.Editor.WindowSizeMode);
+        Assert.Equal("png", loaded.Save.DefaultFormat);
+        Assert.Equal("PrintScreen", loaded.Hotkeys.RegionCapture);
+        Assert.Equal("ko", loaded.Ocr.Language);
+        Assert.Equal("openai", loaded.Ai.Provider);
+        Assert.Equal(100, loaded.RecentCaptures.MaxCount);
     }
 
     [Fact]

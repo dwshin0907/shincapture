@@ -11,6 +11,7 @@ public class SettingsManager
     private readonly string _settingsDir;
     private readonly string _filePath;
     private readonly object _sync = new();
+    private bool _isUpdating;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -47,8 +48,11 @@ public class SettingsManager
 
     public void Save(AppSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         lock (_sync)
         {
+            ThrowIfUpdating();
             WriteCore(settings);
         }
         SettingsChanged?.Invoke(this, EventArgs.Empty);
@@ -60,8 +64,17 @@ public class SettingsManager
 
         lock (_sync)
         {
-            var settings = LoadCore();
-            update(settings);
+            ThrowIfUpdating();
+            var settings = LoadStrictCore();
+            _isUpdating = true;
+            try
+            {
+                update(settings);
+            }
+            finally
+            {
+                _isUpdating = false;
+            }
             WriteCore(settings);
         }
 
@@ -73,10 +86,7 @@ public class SettingsManager
     {
         try
         {
-            if (!File.Exists(_filePath))
-                return new AppSettings();
-            var json = File.ReadAllText(_filePath);
-            return Normalize(JsonSerializer.Deserialize<AppSettings>(json, JsonOptions));
+            return LoadStrictCore();
         }
         catch
         {
@@ -84,11 +94,37 @@ public class SettingsManager
         }
     }
 
+    private AppSettings LoadStrictCore()
+    {
+        if (!File.Exists(_filePath))
+            return new AppSettings();
+        var json = File.ReadAllText(_filePath);
+        return Normalize(JsonSerializer.Deserialize<AppSettings>(json, JsonOptions));
+    }
+
     private void WriteCore(AppSettings settings)
     {
         Directory.CreateDirectory(_settingsDir);
         var json = JsonSerializer.Serialize(Normalize(settings), JsonOptions);
-        File.WriteAllText(_filePath, json);
+        var tempFilePath = Path.Combine(_settingsDir, $"{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            File.WriteAllText(tempFilePath, json);
+            File.Move(tempFilePath, _filePath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempFilePath))
+                File.Delete(tempFilePath);
+        }
+    }
+
+    private void ThrowIfUpdating()
+    {
+        if (_isUpdating)
+            throw new InvalidOperationException(
+                "Settings cannot be saved or updated from within an update callback.");
     }
 
     private static AppSettings Normalize(AppSettings? settings)
