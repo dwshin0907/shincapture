@@ -56,7 +56,7 @@ jobs:
           --self-contained
           -p:PublishSingleFile=true
           -p:Version=${{ env.VERSION }}
-          -o publish_new
+          -o publish
 
       - name: Install Inno Setup
         shell: pwsh
