@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using ShinCapture.Editor;
 using ShinCapture.Models;
 using ShinCapture.Services;
 using ShinCapture.Views.Controls;
@@ -17,17 +18,30 @@ public class TrayIconGeometryConverterTests
         [
             .. TrayMenuCatalog.CreateCaptureActions(new HotkeySettings())
                 .Select(action => action.IconKey),
+            .. EditorToolbarCatalog.Tools.Select(tool => tool.IconKey),
             "editor",
             "folder",
             "settings",
             "key",
             "info",
-            "exit"
+            "exit",
+            "ai",
+            "undo",
+            "redo",
+            "copy",
+            "save-as",
+            "save",
+            "more",
+            "history",
+            "zoom-out",
+            "zoom-in",
+            "fit",
+            "close"
         ];
 
-        Assert.Equal(16, iconKeys.Distinct().Count());
-        foreach (string iconKey in iconKeys)
+        foreach (string iconKey in iconKeys.Distinct())
         {
+            Assert.True(TrayIconGeometryConverter.Contains(iconKey), $"Missing icon geometry: {iconKey}");
             Geometry geometry = Assert.IsAssignableFrom<Geometry>(converter.Convert(
                 iconKey,
                 typeof(Geometry),
