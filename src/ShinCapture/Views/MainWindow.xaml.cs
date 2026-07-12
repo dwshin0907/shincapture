@@ -1,8 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Threading;
 using ShinCapture.Capture;
 using ShinCapture.Helpers;
 using ShinCapture.Models;
@@ -17,12 +20,15 @@ public partial class MainWindow : Window
     private readonly HotkeyManager _hotkeyManager;
     private readonly SettingsManager _settingsManager;
     private readonly SaveManager _saveManager;
+    private readonly GitHubReleaseUpdateService _releaseUpdateService = new();
+    private readonly DispatcherTimer _updateCheckTimer;
     private System.Windows.Forms.ContextMenuStrip _nativeTrayMenu;
     private TrayFlyoutWindow? _trayFlyout;
     private AppSettings _settings;
     private CaptureMode _lastCaptureMode = CaptureMode.Region;
     private bool _editorAutoTranslate;
     private bool _isExiting;
+    private ReleaseUpdateInfo? _availableUpdate;
 
     public MainWindow(SettingsManager settingsManager, SaveManager saveManager)
     {
@@ -52,12 +58,18 @@ public partial class MainWindow : Window
         };
         _trayIcon.DoubleClick += OnTrayDoubleClick;
         _trayIcon.MouseUp += OnTrayMouseUp;
+        _trayIcon.BalloonTipClicked += OnTrayBalloonTipClicked;
+        _updateCheckTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromHours(6)
+        };
+        _updateCheckTimer.Tick += OnUpdateCheckTimerTick;
 
         Loaded += OnLoaded;
         Closing += OnClosing;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         VersionLabel.Text = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
@@ -69,6 +81,65 @@ public partial class MainWindow : Window
         // 시작 시 편집기 바로 열기
         ShowEditor();
         Hide(); // 메인 윈도우는 트레이로
+
+        _updateCheckTimer.Start();
+        await CheckForUpdateAsync();
+    }
+
+    private async void OnUpdateCheckTimerTick(object? sender, EventArgs e)
+    {
+        await CheckForUpdateAsync();
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        Version? installedVersion = System.Reflection.Assembly
+            .GetExecutingAssembly()
+            .GetName()
+            .Version;
+        if (installedVersion == null || _isExiting)
+            return;
+
+        try
+        {
+            ReleaseUpdateInfo? update = await _releaseUpdateService
+                .CheckForUpdateAsync(installedVersion);
+            if (update == null || _isExiting || Dispatcher.HasShutdownStarted)
+                return;
+
+            if (_availableUpdate != null && update.Version <= _availableUpdate.Version)
+                return;
+
+            _availableUpdate = update;
+            _trayIcon.ShowBalloonTip(
+                8000,
+                "신캡쳐 업데이트",
+                $"v{update.Version.Major}.{update.Version.Minor}.{update.Version.Build} 새 버전이 있습니다. 클릭해 다운로드하세요.",
+                ToolTipIcon.Info);
+        }
+        catch
+        {
+            // 업데이트 확인 실패는 캡처 흐름과 트레이 앱을 방해하지 않는다.
+        }
+    }
+
+    private void OnTrayBalloonTipClicked(object? sender, EventArgs e)
+    {
+        if (_availableUpdate == null || _isExiting)
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _availableUpdate.ReleaseUrl,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // 기본 브라우저 호출 실패는 앱을 종료시키지 않는다.
+        }
     }
 
     private void RegisterHotkeys()
@@ -729,6 +800,8 @@ public partial class MainWindow : Window
 
         try
         {
+            _updateCheckTimer.Stop();
+            _updateCheckTimer.Tick -= OnUpdateCheckTimerTick;
             RunCleanupStep(
                 "Failed to unsubscribe the settings change event",
                 () => _settingsManager.SettingsChanged -= OnExternalSettingsChanged);
@@ -738,6 +811,9 @@ public partial class MainWindow : Window
             RunCleanupStep(
                 "Failed to unsubscribe the tray mouse event",
                 () => _trayIcon.MouseUp -= OnTrayMouseUp);
+            RunCleanupStep(
+                "Failed to unsubscribe the tray update notification event",
+                () => _trayIcon.BalloonTipClicked -= OnTrayBalloonTipClicked);
 
             DiscardTrayFlyout("application exit");
 

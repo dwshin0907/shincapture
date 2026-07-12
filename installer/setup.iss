@@ -7,7 +7,7 @@
 #define MyAppNameEn "ShinCapture"
 ; 버전은 로컬 기본값. CI 빌드에서는 ISCC /DMyAppVersion=x.y.z 로 덮어씀
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.7"
+  #define MyAppVersion "1.3.8"
 #endif
 #define MyAppPublisher "ShinCapture"
 #define MyAppURL "https://shincapture.com"
@@ -117,6 +117,15 @@ begin
   end;
 end;
 
+// ── 설치 시작 시 실행 중인 트레이 앱 종료 ──
+procedure StopRunningShinCapture;
+var
+  ResultCode: Integer;
+begin
+  // 레지스트리에 설치 정보가 없는 포터블 실행도 파일 교체 전에 종료한다.
+  Exec('taskkill.exe', '/F /T /IM ShinCapture.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 // ── 이전 버전 자동 제거 (묻지 않고 자동) ──
 function TryUninstall(RootKey: Integer): Boolean;
 var
@@ -128,8 +137,6 @@ begin
   UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8F2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D}_is1';
   if RegQueryStringValue(RootKey, UninstallKey, 'UninstallString', UninstallString) then
   begin
-    // 실행 중인 프로세스 종료
-    Exec('taskkill', '/F /IM ShinCapture.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // 자동 제거 (사일런트)
     Exec(RemoveQuotes(UninstallString), '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Result := True;
@@ -139,6 +146,7 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
+  StopRunningShinCapture;
   if not TryUninstall(HKCU) then
     TryUninstall(HKLM);
 end;
