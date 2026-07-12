@@ -1463,6 +1463,22 @@ public partial class EditorWindow : Window
         menu.IsOpen = true;
     }
 
+    private void OnPremiumContentClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = EditorPremiumContentCatalog.ChannelUri.AbsoluteUri,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            StatusText.Text = "추천 콘텐츠 페이지를 열 수 없습니다";
+        }
+    }
+
     private void OnZoomOutClick(object sender, RoutedEventArgs e) =>
         Canvas.Zoom /= 1.1;
 

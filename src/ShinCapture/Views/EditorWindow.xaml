@@ -88,6 +88,9 @@
                                           AutomationProperties.Name="환경설정 열기"/>
                                 <MenuItem Header="API 키 발급 안내" Click="OnApiKeyHelpClick"
                                           AutomationProperties.Name="API 키 발급 안내 열기"/>
+                                <Separator/>
+                                <MenuItem Header="추천 콘텐츠 · AI 실전 활용법" Click="OnPremiumContentClick"
+                                          AutomationProperties.Name="네이버 프리미엄콘텐츠 AI 실전 활용법 열기"/>
                             </ContextMenu>
                         </Button.ContextMenu>
                         <Path Data="{Binding Source=more, Converter={StaticResource EditorIcon}}"
@@ -145,6 +148,33 @@
                                         Style="{DynamicResource SmallButton}" Click="OnHistoryClear"/>
                             </UniformGrid>
                         </StackPanel>
+                    </Border>
+                    <!-- Premium content promotion -->
+                    <Border DockPanel.Dock="Bottom" Padding="8"
+                            BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,1,0,0">
+                        <Button Style="{DynamicResource PremiumContentCardButton}"
+                                Click="OnPremiumContentClick"
+                                ToolTip="네이버 프리미엄콘텐츠 AI 실전 활용법 채널"
+                                AutomationProperties.Name="네이버 프리미엄콘텐츠 AI 실전 활용법 열기">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="26" Height="26" CornerRadius="7" Background="#03C75A">
+                                    <TextBlock Text="N" Foreground="White" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="7,0,4,0">
+                                    <TextBlock Text="AI 실전 활용법" FontSize="11" FontWeight="SemiBold"/>
+                                    <TextBlock Text="프리미엄콘텐츠에서 보기" FontSize="9.5"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="→" Foreground="#03A94F"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
                     </Border>
                     <!-- Thumbnails -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
