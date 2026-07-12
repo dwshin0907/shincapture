@@ -53,6 +53,7 @@ public sealed class DragExportService
         {
             bitmap.Save(partialPath, ImageFormat.Png);
             File.Move(partialPath, finalPath);
+            Cleanup(timestamp, finalPath);
             return finalPath;
         }
         finally
@@ -61,7 +62,9 @@ public sealed class DragExportService
         }
     }
 
-    public void Cleanup(DateTimeOffset? now = null)
+    public void Cleanup(DateTimeOffset? now = null) => Cleanup(now, protectedPath: null);
+
+    private void Cleanup(DateTimeOffset? now, string? protectedPath)
     {
         if (!Directory.Exists(_directory)) return;
 
@@ -82,7 +85,10 @@ public sealed class DragExportService
             .OrderBy(file => file.LastWriteTimeUtc)
             .ToList();
 
-        foreach (FileInfo expired in files.Where(file => file.LastWriteTimeUtc < cutoffUtc).ToList())
+        foreach (FileInfo expired in files
+                     .Where(file => file.LastWriteTimeUtc < cutoffUtc &&
+                                    !PathsEqual(file.FullName, protectedPath))
+                     .ToList())
         {
             TryDelete(expired.FullName);
             files.Remove(expired);
@@ -91,12 +97,21 @@ public sealed class DragExportService
         long totalBytes = files.Sum(file => file.Length);
         while (files.Count > _maxFiles || totalBytes > _maxBytes)
         {
-            FileInfo oldest = files[0];
-            files.RemoveAt(0);
+            FileInfo? oldest = files.FirstOrDefault(file =>
+                !PathsEqual(file.FullName, protectedPath));
+            if (oldest == null) break;
+
+            files.Remove(oldest);
             if (TryDelete(oldest.FullName))
                 totalBytes -= oldest.Length;
         }
     }
+
+    private static bool PathsEqual(string path, string? other) =>
+        other != null && string.Equals(
+            Path.GetFullPath(path),
+            Path.GetFullPath(other),
+            StringComparison.OrdinalIgnoreCase);
 
     private IEnumerable<string> SafeGetFiles(string pattern)
     {

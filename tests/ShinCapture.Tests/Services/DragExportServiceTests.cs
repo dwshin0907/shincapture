@@ -71,6 +71,22 @@ public sealed class DragExportServiceTests : IDisposable
         Assert.True(File.Exists(newest));
     }
 
+    [Fact]
+    public void CreatePngEnforcesLimitAfterKeepingNewestExport()
+    {
+        var service = new DragExportService(
+            _tempDir, TimeSpan.FromHours(24), maxFiles: 1, maxBytes: 1024 * 1024);
+        var now = new DateTimeOffset(2026, 7, 12, 12, 0, 0, TimeSpan.Zero);
+        using var bitmap = new Bitmap(4, 4);
+
+        string first = service.CreatePng(bitmap, now);
+        string second = service.CreatePng(bitmap, now.AddMilliseconds(1));
+
+        Assert.False(File.Exists(first));
+        Assert.True(File.Exists(second));
+        Assert.Single(Directory.GetFiles(_tempDir, "ShinCapture_*.png"));
+    }
+
     private string CreateCacheFile(
         string suffix, int length, DateTimeOffset lastWriteTime)
     {
