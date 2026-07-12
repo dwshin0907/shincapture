@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -29,6 +30,7 @@ public partial class EditorWindow : Window
     private readonly AppSettings _settings;
     private readonly SettingsManager? _settingsManager;
     private readonly EditorOcrService _ocrService = new();
+    private readonly DragExportService _dragExportService = new();
     private BitmapSource _sourceImage;
     private Bitmap _sourceBitmap;
     private ITool? _activeTool;
@@ -60,6 +62,7 @@ public partial class EditorWindow : Window
         _saveManager = saveManager;
         _settings = settings;
         _settingsManager = settingsManager;
+        _dragExportService.Cleanup();
         _sourceBitmap = capturedImage;
         _sourceImage = BitmapHelper.ToBitmapSource(capturedImage);
 
@@ -1516,7 +1519,7 @@ public partial class EditorWindow : Window
                 Stretch = System.Windows.Media.Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n좌클릭: 열기 | 우클릭: 복사\n↑↓: 이동"
+                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n클릭: 열기 · 드래그: 다른 앱으로 보내기\n우클릭: 메뉴 · ↑↓: 이동"
             };
 
             var cardGrid = new Grid();
@@ -1578,16 +1581,12 @@ public partial class EditorWindow : Window
             AutomationProperties.SetName(
                 border,
                 $"캡처 결과 {i + 1}, {img.PixelWidth} × {img.PixelHeight}");
+            AutomationProperties.SetHelpText(
+                border,
+                "클릭하면 열고, 왼쪽 마우스로 끌면 다른 앱으로 보냅니다");
 
             var localImg = img;
-            border.MouseDown += (_, e) =>
-            {
-                if (e.ChangedButton == MouseButton.Left)
-                {
-                    LoadFromHistory(localImg, focusHistoryItem: true);
-                    e.Handled = true;
-                }
-            };
+            AttachHistoryCardInput(border, localImg);
 
             // 우클릭 컨텍스트 메뉴
             var ctx = new ContextMenu();
@@ -1669,6 +1668,87 @@ public partial class EditorWindow : Window
 
             _historyCards[img] = border;
             HistoryPanel.Children.Add(border);
+        }
+    }
+
+    private void AttachHistoryCardInput(Border card, BitmapSource image)
+    {
+        System.Windows.Point dragStart = default;
+        bool isTrackingLeftDrag = false;
+
+        card.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            dragStart = e.GetPosition(card);
+            isTrackingLeftDrag = true;
+            card.Focus();
+            card.CaptureMouse();
+            e.Handled = true;
+        };
+
+        card.PreviewMouseMove += (_, e) =>
+        {
+            if (!isTrackingLeftDrag || e.LeftButton != MouseButtonState.Pressed)
+                return;
+
+            System.Windows.Point current = e.GetPosition(card);
+            if (!HistoryCardDragPolicy.ShouldStart(
+                    current.X - dragStart.X,
+                    current.Y - dragStart.Y,
+                    SystemParameters.MinimumHorizontalDragDistance,
+                    SystemParameters.MinimumVerticalDragDistance))
+            {
+                return;
+            }
+
+            isTrackingLeftDrag = false;
+            if (Mouse.Captured == card) card.ReleaseMouseCapture();
+            e.Handled = true;
+            StartHistoryCardDrag(card, image);
+        };
+
+        card.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (!isTrackingLeftDrag) return;
+
+            isTrackingLeftDrag = false;
+            if (Mouse.Captured == card) card.ReleaseMouseCapture();
+            e.Handled = true;
+            LoadFromHistory(image, focusHistoryItem: true);
+        };
+    }
+
+    private void StartHistoryCardDrag(Border card, BitmapSource image)
+    {
+        string? path = null;
+        try
+        {
+            SaveCurrentObjects();
+            IEnumerable<EditorObject> objects = _captureObjects.TryGetValue(image, out var saved)
+                ? saved
+                : Array.Empty<EditorObject>();
+
+            using Bitmap rendered = EditorCompositeRenderer.Render(image, objects);
+            path = _dragExportService.CreatePng(rendered);
+            BitmapSource preview = BitmapHelper.ToBitmapSource(rendered);
+
+            var data = new DataObject();
+            data.SetFileDropList(new StringCollection { path });
+            data.SetImage(preview);
+
+            card.Opacity = 0.62;
+            DragDropEffects effect = System.Windows.DragDrop.DoDragDrop(
+                card, data, DragDropEffects.Copy);
+            StatusText.Text = effect == DragDropEffects.None
+                ? "드래그가 취소되었습니다"
+                : $"외부 앱으로 보냄: {Path.GetFileName(path)}";
+        }
+        catch
+        {
+            StatusText.Text = "임시 이미지를 만들어 보낼 수 없습니다";
+        }
+        finally
+        {
+            card.Opacity = 1;
         }
     }
 
@@ -1956,21 +2036,8 @@ public partial class EditorWindow : Window
         RefreshOcrBanner();
     }
 
-    private Bitmap RenderFinalImage()
-    {
-        var width = _sourceImage.PixelWidth;
-        var height = _sourceImage.PixelHeight;
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
-        {
-            dc.DrawImage(_sourceImage, new Rect(0, 0, width, height));
-            foreach (var obj in _objects.Where(o => o.IsVisible))
-                obj.RenderWithTransform(dc);
-        }
-        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return BitmapHelper.ToBitmap(rtb);
-    }
+    private Bitmap RenderFinalImage() =>
+        EditorCompositeRenderer.Render(_sourceImage, _objects);
 
     private void SetStatus(string text)
     {
