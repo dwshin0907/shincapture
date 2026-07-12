@@ -10,12 +10,14 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Controls.Primitives;
 using ShinCapture.Editor;
 using ShinCapture.Editor.Tools;
 using ShinCapture.Editor.Objects;
 using ShinCapture.Helpers;
 using ShinCapture.Models;
 using ShinCapture.Services;
+using ShinCapture.Views.Controls;
 
 namespace ShinCapture.Views;
 
@@ -31,6 +33,10 @@ public partial class EditorWindow : Window
     private Bitmap _sourceBitmap;
     private ITool? _activeTool;
     private readonly Dictionary<string, Button> _toolButtons = new();
+    private readonly Dictionary<string, TextBlock> _toolLabels = new();
+    private EditorChromeMode? _lastChromeMode;
+    private bool? _historyPanelVisibilityOverride;
+    private static readonly TrayIconGeometryConverter IconConverter = new();
 
     // 캡쳐 기록 (세션 동안 유지, 최대 50개)
     private static readonly List<BitmapSource> _captureHistory = new();
@@ -80,22 +86,31 @@ public partial class EditorWindow : Window
             UpdateLayout();
             Canvas.BackgroundImage = _sourceImage;
             Canvas.ApplyInitialZoom();
-            UpdateBannerVisibility();
+            UpdateChromeLayout();
         };
 
-        SizeChanged += (_, _) => UpdateBannerVisibility();
+        SizeChanged += (_, _) => UpdateChromeLayout();
     }
 
-    /// <summary>윈도우가 좁을 땐 광고 배너(200 dip)를 숨겨서 툴바가 세로로 wrap되지 않게 함.</summary>
-    private void UpdateBannerVisibility()
+    private void UpdateChromeLayout()
     {
-        if (BannerArea == null) return;
-        // 1100 dip = XAML 디자인 사이즈. 그 이하에선 툴바 + 배너가 한 줄에 못 들어감.
-        // 큰 화면: toolbar 배너만 표시. 작은 화면: status bar의 compact 배너로 대체.
-        bool isWide = ActualWidth >= 1100;
-        BannerArea.Visibility = isWide ? Visibility.Visible : Visibility.Collapsed;
-        if (StatusBarBannerArea != null)
-            StatusBarBannerArea.Visibility = isWide ? Visibility.Collapsed : Visibility.Visible;
+        if (HistoryBorder == null) return;
+
+        EditorChromeLayout layout = EditorChromeLayoutPolicy.Resolve(ActualWidth);
+        if (_lastChromeMode != layout.Mode)
+        {
+            _historyPanelVisibilityOverride = null;
+            _lastChromeMode = layout.Mode;
+        }
+
+        foreach (TextBlock label in _toolLabels.Values)
+            label.Visibility = layout.ShowToolLabels ? Visibility.Visible : Visibility.Collapsed;
+
+        bool showHistory = _historyPanelVisibilityOverride ?? layout.ShowHistoryByDefault;
+        HistoryBorder.Width = showHistory ? 180 : 0;
+        HistoryBorder.Visibility = showHistory ? Visibility.Visible : Visibility.Collapsed;
+        if (HistoryToggleBtn != null)
+            HistoryToggleBtn.Style = (Style)FindResource(showHistory ? "ToolbarButtonActive" : "EditorIconButton");
     }
 
     private void SizeWindowToImage()
@@ -274,7 +289,7 @@ public partial class EditorWindow : Window
         {
             OcrPanel.Visibility = Visibility.Collapsed;
             OcrTextBox.Text = "";
-            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelTitle.Text = "텍스트 추출";
             OcrPanelMeta.Text = "";
             OcrSourceLangLabel.Text = "";
             OcrTranslatedBox.Text = "";
@@ -562,231 +577,30 @@ public partial class EditorWindow : Window
 
     private void BuildToolbar()
     {
-        // 아이콘 전용 도구 목록 (유니코드 심볼)
-        var tools = new (string name, string icon, string group, string shortcut)[]
-        {
-            ("선택",    "cursor", "select", "V"),   // 윈도우 마우스 포인터 (Path)
-            ("펜",      "pen", "draw",   "P"),      // 펜 Path 아이콘
-            ("형광펜",  "\u301C", "draw",   "H"),   // 〜 꼬불
-            ("도형",    "\u25A1", "draw",   "U"),   // □
-            ("화살표",  "\u2197", "draw",   "A"),   // ↗
-            ("텍스트",  "T",      "text",   "T"),
-            ("말풍선",  "\u2606", "text",   "B"),   // ☆
-            ("모자이크","\u25A6", "effect", "M"),   // ▦
-            ("블러",    "\u25CE", "effect", ""),     // ◎
-            ("번호",    "\u2460", "effect", "N"),   // ①
-            ("이미지",  "\u229E", "insert", "I"),   // ⊞
-            ("색상추출","\u2316", "insert", ""),    // ⌖
-            ("크롭",    "\u2702", "edit",   "C"),   // ✂
-            ("지우개",  "\u2312", "edit",   "E"),   // ⌒
-        };
-
         string? lastGroup = null;
-        foreach (var (name, icon, group, sc) in tools)
+        foreach (EditorToolDescriptor tool in EditorToolbarCatalog.Tools)
         {
-            if (lastGroup != null && lastGroup != group)
+            if (lastGroup != null && lastGroup != tool.Group)
                 ToolbarPanel.Children.Add(CreateSeparator());
 
-            var tip = string.IsNullOrEmpty(sc) ? name : $"{name} ({sc})";
-            var btn = CreateToolButton(icon, tip);
-            btn.Click += (_, _) => SelectTool(name);
+            Button btn = CreateToolButton(tool);
+            btn.Click += (_, _) => SelectTool(tool.Name);
             ToolbarPanel.Children.Add(btn);
-            _toolButtons[name] = btn;
-            lastGroup = group;
+            _toolButtons[tool.Name] = btn;
+            lastGroup = tool.Group;
         }
 
-        ToolbarPanel.Children.Add(CreateSeparator());
+        UtilityCommandPanel.Children.Add(CreateAiMenuButton());
+        UtilityCommandPanel.Children.Add(CreateSeparator());
 
-        // OCR 강조 버튼 — 드로잉 도구가 아닌 액션 버튼이라 별도 스타일
-        var ocrBtn = CreateOcrActionButton();
-        ToolbarPanel.Children.Add(ocrBtn);
-        _toolButtons["OCR"] = ocrBtn;
-
-        // 번역 버튼 — OCR 버튼 바로 오른쪽
-        ToolbarPanel.Children.Add(CreateTranslateActionButton());
-
-        // 스마트 컷 버튼 — GrabCut 객체 추출 (새 캡쳐)
-        ToolbarPanel.Children.Add(CreateSmartCutActionButton());
-
-        ToolbarPanel.Children.Add(CreateSeparator());
-
-        var undoBtn = CreateToolButton("\u21A9", "실행취소 (Ctrl+Z)"); // ↩
+        Button undoBtn = CreateIconCommandButton("undo", "실행취소 (Ctrl+Z)");
         undoBtn.Click += (_, _) => _commandStack.Undo();
-        ToolbarPanel.Children.Add(undoBtn);
+        UtilityCommandPanel.Children.Add(undoBtn);
 
-        var redoBtn = CreateToolButton("\u21AA", "다시실행 (Ctrl+Y)"); // ↪
+        Button redoBtn = CreateIconCommandButton("redo", "다시실행 (Ctrl+Y)");
         redoBtn.Click += (_, _) => _commandStack.Redo();
-        ToolbarPanel.Children.Add(redoBtn);
+        UtilityCommandPanel.Children.Add(redoBtn);
 
-        // 채널 배너 (우측 고정, 네이버 녹색 그라데이션 + 플래시카드 애니메이션)
-        LinearGradientBrush MakeBg(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2)
-        {
-            var brush = new LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0, 0),
-                EndPoint = new System.Windows.Point(0, 1)
-            };
-            brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(r1, g1, b1), 0));
-            brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(r2, g2, b2), 1));
-            return brush;
-        }
-
-        var shadow = new System.Windows.Media.Effects.DropShadowEffect
-        {
-            BlurRadius = 8,
-            ShadowDepth = 1,
-            Direction = 270,
-            Color = System.Windows.Media.Colors.Black,
-            Opacity = 0.22
-        };
-
-        var banner = new Border
-        {
-            Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50),
-            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 6, 10, 6),
-            Cursor = Cursors.Hand,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Effect = shadow,
-            ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
-        };
-
-        var stack = new StackPanel { Orientation = System.Windows.Controls.Orientation.Vertical };
-        var subText = new TextBlock
-        {
-            Text = "네이버 프리미엄콘텐츠 AI 분야 1위",
-            FontSize = 9.5,
-            FontWeight = FontWeights.Normal,
-            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 1)
-        };
-
-        var flashMessages = new[]
-        {
-            "아직도 ChatGPT만 쓰세요? \u2192",
-            "ChatGPT도 모르는 실전 활용법 \u2192",
-            "AI 시대, 뒤처지지 않으려면 \u2192",
-            "지금 바로 공부하러 가기 \u2192"
-        };
-        int flashIndex = 0;
-        var mainText = new TextBlock
-        {
-            Text = flashMessages[0],
-            FontSize = 12.5,
-            FontWeight = FontWeights.Bold,
-            Foreground = System.Windows.Media.Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            // 메시지 길이가 달라도 폭이 흔들리지 않게 고정
-            Width = 200
-        };
-        stack.Children.Add(subText);
-        stack.Children.Add(mainText);
-        banner.Child = stack;
-
-        // 2.5초 간격 플래시카드: fade-out (280ms) ▸ 텍스트 교체 ▸ fade-in (280ms)
-        var flashTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(2.5)
-        };
-        flashTimer.Tick += (_, _) =>
-        {
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
-                1.0, 0.0, new Duration(TimeSpan.FromMilliseconds(280)))
-            {
-                EasingFunction = new System.Windows.Media.Animation.QuadraticEase
-                {
-                    EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn
-                }
-            };
-            fadeOut.Completed += (__, ___) =>
-            {
-                flashIndex = (flashIndex + 1) % flashMessages.Length;
-                mainText.Text = flashMessages[flashIndex];
-                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
-                    0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(280)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase
-                    {
-                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
-                    }
-                };
-                mainText.BeginAnimation(UIElement.OpacityProperty, fadeIn);
-            };
-            mainText.BeginAnimation(UIElement.OpacityProperty, fadeOut);
-        };
-        flashTimer.Start();
-        this.Closed += (_, _) => flashTimer.Stop();
-
-        banner.MouseDown += (_, _) =>
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "https://contents.premium.naver.com/market/ai",
-                UseShellExecute = true
-            });
-        };
-        banner.MouseEnter += (_, _) =>
-        {
-            banner.Background = MakeBg(0x05, 0xDB, 0x66, 0x03, 0xBE, 0x57);
-            shadow.Opacity = 0.35;
-            shadow.BlurRadius = 12;
-        };
-        banner.MouseLeave += (_, _) =>
-        {
-            banner.Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50);
-            shadow.Opacity = 0.22;
-            shadow.BlurRadius = 8;
-        };
-        BannerArea.Child = banner;
-
-        // Status bar용 compact banner — 작은 화면(toolbar 배너 hide)에서 API 키 발급법 버튼 우측에 배치.
-        // 세로는 status bar 버튼 사이즈에 맞춰 작게, 가로는 toolbar 배너보다 길게.
-        var statusBanner = new Border
-        {
-            Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50),
-            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(12, 4, 12, 4),
-            Cursor = Cursors.Hand,
-            VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "ChatGPT도 모르는 AI실전활용법 — 네이버 프리미엄콘텐츠 AI 활용법 분야 1위 채널"
-        };
-        var statusText = new TextBlock
-        {
-            Text = "📚 ChatGPT도 모르는 AI실전활용법 →",
-            FontSize = 11,
-            FontWeight = FontWeights.Bold,
-            Foreground = System.Windows.Media.Brushes.White,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            Width = 280
-        };
-        statusBanner.Child = statusText;
-        statusBanner.MouseDown += (_, _) =>
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "https://contents.premium.naver.com/market/ai",
-                UseShellExecute = true
-            });
-        };
-        statusBanner.MouseEnter += (_, _) =>
-        {
-            statusBanner.Background = MakeBg(0x05, 0xDB, 0x66, 0x03, 0xBE, 0x57);
-        };
-        statusBanner.MouseLeave += (_, _) =>
-        {
-            statusBanner.Background = MakeBg(0x03, 0xC7, 0x5A, 0x02, 0xB0, 0x50);
-        };
-        StatusBarBannerArea.Child = statusBanner;
     }
 
     private void SelectTool(string name)
@@ -856,54 +670,126 @@ public partial class EditorWindow : Window
         UpdateStatus();
     }
 
-    private Button CreateToolButton(string icon, string tooltip)
+    private Button CreateToolButton(EditorToolDescriptor tool)
     {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(CreateIconPath(tool.IconKey, 19));
 
-        if (icon is "cursor" or "pen")
+        var label = new TextBlock
         {
-            var pathData = icon switch
-            {
-                "cursor" => "M 2,0 L 2,14 L 5.5,10.5 L 9,16 L 11,15 L 7.5,9 L 12,9 Z",
-                "pen" => "M 13.5,1.5 L 15,3 L 5,13 L 2,14 L 3,11 Z M 11.5,3.5 L 13,5",
-                _ => ""
-            };
-            var path = new System.Windows.Shapes.Path
-            {
-                Data = Geometry.Parse(pathData),
-                Fill = icon == "cursor"
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1A, 0x1A, 0x1A))
-                    : null,
-                Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1A, 0x1A, 0x1A)),
-                StrokeThickness = icon == "cursor" ? 0.8 : 1.4,
-                StrokeLineJoin = PenLineJoin.Round,
-                Width = 14, Height = 16,
-                Stretch = System.Windows.Media.Stretch.Uniform,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            if (icon == "cursor")
-            {
-                path.Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF));
-                path.StrokeThickness = 0.8;
-            }
-            sp.Children.Add(path);
-        }
-        else
-        {
-            sp.Children.Add(new TextBlock { Text = icon, FontSize = 16, VerticalAlignment = VerticalAlignment.Center });
-        }
-
-        var name = tooltip.Contains('(') ? tooltip[..tooltip.IndexOf('(')].Trim() : tooltip;
-        sp.Children.Add(new TextBlock { Text = name, FontSize = 13, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-        return new Button
-        {
-            Content = sp,
-            Style = (Style)FindResource("ToolbarButton"),
-            Margin = new Thickness(1),
-            ToolTip = tooltip
+            Text = tool.Name,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
         };
+        panel.Children.Add(label);
+        _toolLabels[tool.Name] = label;
+
+        var button = new Button
+        {
+            Content = panel,
+            Style = (Style)FindResource("ToolbarButton"),
+            Margin = new Thickness(1, 0, 1, 0),
+            ToolTip = tool.ToolTip
+        };
+        AutomationProperties.SetName(button, tool.ToolTip);
+        return button;
     }
 
+    private Button CreateIconCommandButton(string iconKey, string accessibleName)
+    {
+        var button = new Button
+        {
+            Content = CreateIconPath(iconKey, 18),
+            Style = (Style)FindResource("EditorIconButton"),
+            Margin = new Thickness(1, 0, 1, 0),
+            ToolTip = accessibleName
+        };
+        AutomationProperties.SetName(button, accessibleName);
+        return button;
+    }
+
+    private Button CreateAiMenuButton()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(CreateIconPath("ai", 18));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "AI 도구",
+            Margin = new Thickness(6, 0, 2, 0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var menu = new ContextMenu { Placement = PlacementMode.Bottom };
+        menu.Items.Add(CreateActionMenuItem("텍스트 추출", "text", (_, _) => RunEditorOcr()));
+        menu.Items.Add(CreateActionMenuItem("번역 캡처", "translate", (_, _) => RequestTranslateCapture()));
+        menu.Items.Add(CreateActionMenuItem("스마트 컷", "spark", (_, _) => RequestSmartCutCapture()));
+
+        var button = new Button
+        {
+            Content = panel,
+            ContextMenu = menu,
+            Style = (Style)FindResource("EditorCommandButton"),
+            Background = (System.Windows.Media.Brush)FindResource("AccentSurfaceBrush"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBorderBrush"),
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Margin = new Thickness(2, 0, 2, 0),
+            ToolTip = "텍스트 추출, 번역 캡처, 스마트 컷"
+        };
+        AutomationProperties.SetName(button, "AI 도구 메뉴");
+        button.Click += (_, _) =>
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        };
+        return button;
+    }
+
+    private MenuItem CreateActionMenuItem(
+        string label,
+        string iconKey,
+        RoutedEventHandler onClick)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(CreateIconPath(iconKey, 18));
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(9, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var item = new MenuItem { Header = panel };
+        item.Click += onClick;
+        AutomationProperties.SetName(item, label);
+        return item;
+    }
+
+    private static System.Windows.Shapes.Path CreateIconPath(string iconKey, double size)
+    {
+        Geometry geometry = (Geometry)IconConverter.Convert(
+            iconKey,
+            typeof(Geometry),
+            parameter: null!,
+            System.Globalization.CultureInfo.InvariantCulture);
+
+        return new System.Windows.Shapes.Path
+        {
+            Data = geometry,
+            Stroke = (System.Windows.Media.Brush)Application.Current.FindResource("TextSecondaryBrush"),
+            StrokeThickness = 1.8,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Width = size,
+            Height = size,
+            Stretch = System.Windows.Media.Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
     private UIElement CreateSeparator()
     {
         return new Border
@@ -915,102 +801,9 @@ public partial class EditorWindow : Window
         };
     }
 
-    private Button CreateOcrActionButton()
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock
-        {
-            Text = "\U0001F524",  // 🔤
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 3, 0)
-        });
-        sp.Children.Add(new TextBlock
-        {
-            Text = "텍스트 추출",
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var btn = new Button
-        {
-            Content = sp,
-            Padding = new Thickness(9, 0, 9, 0),
-            Margin = new Thickness(2, 1, 2, 1),
-            Height = 22,
-            Style = (Style)FindResource("AccentButton"),
-            ToolTip = "캡쳐 이미지에서 텍스트 추출 (OCR)"
-        };
-        btn.Click += (_, _) => RunEditorOcr();
-        return btn;
-    }
-
-    private Button CreateTranslateActionButton()
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock
-        {
-            Text = "\U0001F310",  // 🌐
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 3, 0)
-        });
-        sp.Children.Add(new TextBlock
-        {
-            Text = "번역",
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var btn = new Button
-        {
-            Content = sp,
-            Padding = new Thickness(9, 0, 9, 0),
-            Margin = new Thickness(2, 1, 2, 1),
-            Height = 22,
-            Style = (Style)FindResource("AccentButton"),
-            ToolTip = "영역 캡쳐 ▸ OCR ▸ 자동 번역"
-        };
-        btn.Click += (_, _) => RequestTranslateCapture();
-        return btn;
-    }
-
     private void RequestTranslateCapture()
     {
         CaptureRequested?.Invoke(Models.CaptureMode.Translate, /* autoTranslate */ true);
-    }
-
-    private Button CreateSmartCutActionButton()
-    {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock
-        {
-            Text = "✨",  // ✨
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 3, 0)
-        });
-        sp.Children.Add(new TextBlock
-        {
-            Text = "스마트 컷",
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var btn = new Button
-        {
-            Content = sp,
-            Padding = new Thickness(9, 0, 9, 0),
-            Margin = new Thickness(2, 1, 2, 1),
-            Height = 22,
-            Style = (Style)FindResource("AccentButton"),
-            ToolTip = "자유형 영역 ▸ GrabCut 자동 객체 추출 (배경 투명 PNG)"
-        };
-        btn.Click += (_, _) => RequestSmartCutCapture();
-        return btn;
     }
 
     private void RequestSmartCutCapture()
@@ -1061,23 +854,25 @@ public partial class EditorWindow : Window
             PropertyPanel.Children.Add(MakeSectionLabel(colorLabel));
 
             // 현재 선택된 색상 미리보기 (항상 맨 앞에 크게 표시)
-            var currentSwatch = new Border
+            var currentSwatch = new Button
             {
-                Width = 22, Height = 22,
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(_currentColor),
-                BorderThickness = new Thickness(2),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+                Width = 30, Height = 30,
+                Style = (Style)FindResource("EditorIconButton"),
+                Padding = new Thickness(4),
                 Margin = new Thickness(0, 0, 4, 0),
                 ToolTip = $"#{_currentColor.R:X2}{_currentColor.G:X2}{_currentColor.B:X2}",
-                Cursor = Cursors.Hand,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                Content = new Border
                 {
-                    Color = System.Windows.Media.Colors.DodgerBlue, BlurRadius = 4,
-                    ShadowDepth = 0, Opacity = 0.5
+                    Width = 18,
+                    Height = 18,
+                    CornerRadius = new CornerRadius(5),
+                    Background = new SolidColorBrush(_currentColor),
+                    BorderThickness = new Thickness(2),
+                    BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush")
                 }
             };
-            currentSwatch.MouseDown += (_, _) => OpenColorPicker();
+            AutomationProperties.SetName(currentSwatch, $"현재 색상 #{_currentColor.R:X2}{_currentColor.G:X2}{_currentColor.B:X2}, 색상 선택 열기");
+            currentSwatch.Click += (_, _) => OpenColorPicker();
             PropertyPanel.Children.Add(currentSwatch);
 
             // 팔레트 색상들
@@ -1092,18 +887,28 @@ public partial class EditorWindow : Window
             {
                 var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
                 bool selected = _currentColor == color;
-                var swatch = new Border
+                var colorSample = new Border
                 {
-                    Width = 14, Height = 14,
-                    CornerRadius = new CornerRadius(7),
+                    Width = 18, Height = 18,
+                    CornerRadius = new CornerRadius(9),
                     Background = new SolidColorBrush(color),
                     BorderThickness = new Thickness(selected ? 2 : 1),
                     BorderBrush = selected
                         ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                        : new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0)),
-                    Margin = new Thickness(1), Cursor = Cursors.Hand
+                        : new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0))
                 };
-                swatch.MouseDown += (_, _) =>
+                var swatch = new Button
+                {
+                    Width = 28,
+                    Height = 28,
+                    Padding = new Thickness(4),
+                    Margin = new Thickness(1),
+                    Style = (Style)FindResource("EditorIconButton"),
+                    Content = colorSample,
+                    ToolTip = hex
+                };
+                AutomationProperties.SetName(swatch, $"색상 {hex}");
+                swatch.Click += (_, _) =>
                 {
                     _currentColor = color;
                     if (_activeTool != null) _activeTool.CurrentColor = color;
@@ -1113,31 +918,24 @@ public partial class EditorWindow : Window
             }
 
             // 스포이드 버튼 (이미지에서 색상 추출)
-            var eyedropBtn = new Border
+            var eyedropBtn = new Button
             {
-                Width = 22, Height = 22,
-                CornerRadius = new CornerRadius(4),
-                Background = System.Windows.Media.Brushes.Transparent,
-                BorderThickness = new Thickness(1),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("BorderLightBrush"),
-                Margin = new Thickness(3, 0, 0, 0), Cursor = Cursors.Hand,
+                Width = 30, Height = 30,
+                Style = (Style)FindResource("EditorIconButton"),
+                Margin = new Thickness(3, 0, 0, 0),
                 ToolTip = "이미지에서 색상 추출 (스포이드)",
-                Child = new TextBlock { Text = "\u2316", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                Content = CreateIconPath("eyedropper", 17)
             };
-            eyedropBtn.MouseDown += (_, _) => SelectTool("색상추출");
-            eyedropBtn.MouseEnter += (_, _) => eyedropBtn.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xE8, 0xE8));
-            eyedropBtn.MouseLeave += (_, _) => eyedropBtn.Background = System.Windows.Media.Brushes.Transparent;
+            AutomationProperties.SetName(eyedropBtn, "이미지에서 색상 추출");
+            eyedropBtn.Click += (_, _) => SelectTool("색상추출");
             PropertyPanel.Children.Add(eyedropBtn);
 
             // 컬러 피커 버튼 (전체 색상 다이얼로그)
-            var pickerBtn = new Border
+            var pickerBtn = new Button
             {
-                Width = 22, Height = 22,
-                CornerRadius = new CornerRadius(4),
-                Background = System.Windows.Media.Brushes.Transparent,
-                BorderThickness = new Thickness(1),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("BorderLightBrush"),
-                Margin = new Thickness(2, 0, 0, 0), Cursor = Cursors.Hand,
+                Width = 30, Height = 30,
+                Style = (Style)FindResource("EditorIconButton"),
+                Margin = new Thickness(2, 0, 0, 0),
                 ToolTip = "색상 선택 (전체 팔레트)"
             };
             // 무지개 그라데이션 아이콘
@@ -1156,10 +954,9 @@ public partial class EditorWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            pickerBtn.Child = pickerIcon;
-            pickerBtn.MouseDown += (_, _) => OpenColorPicker();
-            pickerBtn.MouseEnter += (_, _) => pickerBtn.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xE8, 0xE8));
-            pickerBtn.MouseLeave += (_, _) => pickerBtn.Background = System.Windows.Media.Brushes.Transparent;
+            pickerBtn.Content = pickerIcon;
+            AutomationProperties.SetName(pickerBtn, "전체 색상 선택 열기");
+            pickerBtn.Click += (_, _) => OpenColorPicker();
             PropertyPanel.Children.Add(pickerBtn);
 
             PropertyPanel.Children.Add(MakeDivider());
@@ -1339,26 +1136,31 @@ public partial class EditorWindow : Window
         }
     }
 
-    private Border MakeColorSwatch(System.Windows.Media.Color color, System.Windows.Media.Color? selected, Action<System.Windows.Media.Color> onClick)
+    private Button MakeColorSwatch(System.Windows.Media.Color color, System.Windows.Media.Color? selected, Action<System.Windows.Media.Color> onClick)
     {
         bool isSelected = selected.HasValue && selected.Value == color;
-        var swatch = new Border
+        string hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        var sample = new Border
         {
-            Width = 14, Height = 14, CornerRadius = new CornerRadius(4),
+            Width = 18, Height = 18, CornerRadius = new CornerRadius(5),
             Background = new SolidColorBrush(color),
-            BorderThickness = new Thickness(isSelected ? 2.5 : 1),
+            BorderThickness = new Thickness(isSelected ? 2 : 1),
             BorderBrush = isSelected
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0)),
-            Margin = new Thickness(1), Cursor = Cursors.Hand
+                : new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0))
         };
-        if (isSelected)
-            swatch.Effect = new System.Windows.Media.Effects.DropShadowEffect
-            {
-                Color = System.Windows.Media.Colors.DodgerBlue, BlurRadius = 4,
-                ShadowDepth = 0, Opacity = 0.6
-            };
-        swatch.MouseDown += (_, _) => onClick(color);
+        var swatch = new Button
+        {
+            Width = 28,
+            Height = 28,
+            Padding = new Thickness(4),
+            Margin = new Thickness(1),
+            Style = (Style)FindResource(isSelected ? "ToolbarButtonActive" : "EditorIconButton"),
+            Content = sample,
+            ToolTip = hex
+        };
+        AutomationProperties.SetName(swatch, $"색상 {hex}");
+        swatch.Click += (_, _) => onClick(color);
         return swatch;
     }
 
@@ -1392,8 +1194,10 @@ public partial class EditorWindow : Window
 
     private Button MakeSmallButton(string text, bool active) => new Button
     {
-        Content = text, FontSize = 10, Padding = new Thickness(4, 2, 4, 2),
+        Content = text, FontSize = 11, Padding = new Thickness(7, 4, 7, 4),
         Margin = new Thickness(1), Cursor = Cursors.Hand,
+        MinHeight = 30,
+        FocusVisualStyle = (Style)FindResource("EditorFocusVisual"),
         Background = active
             ? (System.Windows.Media.Brush)FindResource("ToolbarButtonActiveBrush")
             : System.Windows.Media.Brushes.Transparent,
@@ -1416,7 +1220,7 @@ public partial class EditorWindow : Window
         if (toolName == "형광펜")
         {
             SubOptionPanel.Children.Add(MakeSectionLabel("그라데이션"));
-            var modes = new[] { "단색", "🌈 무지개", "🌑 모노", "🍂 가을", "🌿 여름", "🌊 바다", "🎀 파스텔", "💡 네온" };
+            var modes = new[] { "단색", "무지개", "모노", "가을", "여름", "바다", "파스텔", "네온" };
             var modeKeys = new[] { "없음", "무지개", "모노", "가을", "여름", "바다", "파스텔", "네온" };
             for (int i = 0; i < modes.Length; i++)
             {
@@ -1608,8 +1412,8 @@ public partial class EditorWindow : Window
             SubOptionPanel.Children.Add(MakeSectionLabel("지우개 모드"));
             var modes = new (string label, EraserMode mode)[]
             {
-                ("🖱 개체 지우개", EraserMode.Object),
-                ("▭ 영역 지우개", EraserMode.Area),
+                ("개체 지우개", EraserMode.Object),
+                ("영역 지우개", EraserMode.Area),
             };
             foreach (var (label, mode) in modes)
             {
@@ -1645,6 +1449,35 @@ public partial class EditorWindow : Window
         ZoomText.Text = $"{zoomRatio * 100:0}%";
     }
 
+    private void OnHistoryToggleClick(object sender, RoutedEventArgs e)
+    {
+        _historyPanelVisibilityOverride = HistoryBorder.Visibility != Visibility.Visible;
+        UpdateChromeLayout();
+    }
+
+    private void OnMoreClick(object sender, RoutedEventArgs e)
+    {
+        if (MoreBtn.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = MoreBtn;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void OnZoomOutClick(object sender, RoutedEventArgs e) =>
+        Canvas.Zoom /= 1.1;
+
+    private void OnZoomInClick(object sender, RoutedEventArgs e) =>
+        Canvas.Zoom *= 1.1;
+
+    private void OnZoomResetClick(object sender, RoutedEventArgs e)
+    {
+        double dpiScale = VisualTreeHelper.GetDpi(Canvas).PixelsPerDip;
+        Canvas.Zoom = 1.0 / dpiScale;
+    }
+
+    private void OnZoomFitClick(object sender, RoutedEventArgs e) =>
+        Canvas.ApplyInitialZoom();
+
     // ── 캡쳐 기록 ──────────────────────────────────────────────
 
     private static void AddToHistory(BitmapSource image)
@@ -1667,9 +1500,43 @@ public partial class EditorWindow : Window
                 Stretch = System.Windows.Media.Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand,
                 ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n좌클릭: 열기 | 우클릭: 복사\n↑↓: 이동"
             };
+
+            var cardGrid = new Grid();
+            cardGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            cardGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            thumb.Margin = new Thickness(4);
+            cardGrid.Children.Add(thumb);
+
+            var footer = new Border
+            {
+                Background = (System.Windows.Media.Brush)FindResource("BackgroundTertiaryBrush"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(7, 4, 7, 4)
+            };
+            Grid.SetRow(footer, 1);
+            var footerGrid = new Grid();
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            footerGrid.Children.Add(new TextBlock
+            {
+                Text = $"#{i + 1}",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush")
+            });
+            var dimensions = new TextBlock
+            {
+                Text = $"{img.PixelWidth}×{img.PixelHeight}",
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush")
+            };
+            Grid.SetColumn(dimensions, 1);
+            footerGrid.Children.Add(dimensions);
+            footer.Child = footerGrid;
+            cardGrid.Children.Add(footer);
 
             bool isSelected = (img == _sourceImage);
             var border = new Border
@@ -1677,18 +1544,19 @@ public partial class EditorWindow : Window
                 Tag = img,
                 Focusable = true,
                 FocusVisualStyle = (Style)FindResource("HistoryItemFocusVisual"),
-                Width = 100,
-                Height = 100,
-                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xF0, 0xF0)),
+                Width = 148,
+                Height = 124,
+                Background = (System.Windows.Media.Brush)FindResource("BackgroundPrimaryBrush"),
                 BorderThickness = new Thickness(isSelected ? 2 : 1),
                 BorderBrush = isSelected
                     ? (System.Windows.Media.Brush)FindResource("AccentBrush")
                     : (System.Windows.Media.Brush)FindResource("DividerBrush"),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(4),
-                Margin = new Thickness(0, 0, 0, 4),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(3),
+                Margin = new Thickness(0, 0, 0, 8),
                 ClipToBounds = true,
-                Child = thumb
+                Cursor = Cursors.Hand,
+                Child = cardGrid
             };
             KeyboardNavigation.SetIsTabStop(border, isSelected);
             AutomationProperties.SetName(
@@ -1730,8 +1598,8 @@ public partial class EditorWindow : Window
             };
             ctx.Items.Add(miSave);
 
-            var miQuickSave = new MenuItem { Header = "빠른 저장 (자동경로)" };
-            var miCopyPath = new MenuItem { Header = "저장경로 복사", IsEnabled = false };
+            var miQuickSave = new MenuItem { Header = "빠른 저장" };
+            var miCopyPath = new MenuItem { Header = "저장 경로 복사", IsEnabled = false };
             miQuickSave.Click += (_, _) =>
             {
                 var bmp = BitmapHelper.ToBitmap(localImg);
@@ -1764,7 +1632,11 @@ public partial class EditorWindow : Window
 
             ctx.Items.Add(new Separator());
 
-            var miDelete = new MenuItem { Header = "기록에서 삭제" };
+            var miDelete = new MenuItem
+            {
+                Header = "기록에서 삭제",
+                Foreground = (System.Windows.Media.Brush)FindResource("ErrorBrush")
+            };
             miDelete.Click += (_, _) =>
             {
                 _captureHistory.Remove(localImg);
@@ -1773,7 +1645,7 @@ public partial class EditorWindow : Window
                     LoadFromHistory(_captureHistory[0]);
                 else
                     BuildHistory();
-                StatusText.Text = "캡쳐 기록 삭제됨";
+                StatusText.Text = "캡처 기록 삭제됨";
             };
             ctx.Items.Add(miDelete);
 
@@ -1811,9 +1683,23 @@ public partial class EditorWindow : Window
 
     private void OnHistoryClear(object sender, RoutedEventArgs e)
     {
+        if (_captureHistory.Count == 0)
+        {
+            StatusText.Text = "비울 캡처 기록이 없습니다";
+            return;
+        }
+
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            "현재 세션의 캡처 기록을 모두 비울까요?",
+            "캡처 기록 비우기",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
         _captureHistory.Clear();
         BuildHistory();
-        StatusText.Text = "캡쳐 기록 비움";
+        StatusText.Text = "캡처 기록을 비웠습니다";
     }
 
     private void DeleteSelectedObjects()
@@ -1944,9 +1830,9 @@ public partial class EditorWindow : Window
     }
 
     /// <summary>컬러 피커 미니 버튼 (무지개 원 아이콘)</summary>
-    private Border MakePickerButton(Action<System.Windows.Media.Color> onPicked)
+    private Button MakePickerButton(Action<System.Windows.Media.Color> onPicked)
     {
-        var btn = new Border
+        var sample = new Border
         {
             Width = 18, Height = 18,
             CornerRadius = new CornerRadius(9),
@@ -1957,12 +1843,20 @@ public partial class EditorWindow : Window
                     new GradientStop(Colors.Blue, 1)
                 }, 0),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0)),
+            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 0, 0))
+        };
+        var btn = new Button
+        {
+            Width = 30,
+            Height = 30,
+            Padding = new Thickness(5),
             Margin = new Thickness(3, 0, 0, 0),
-            Cursor = Cursors.Hand,
+            Style = (Style)FindResource("EditorIconButton"),
+            Content = sample,
             ToolTip = "색상 선택 (전체 팔레트)"
         };
-        btn.MouseDown += (_, _) =>
+        AutomationProperties.SetName(btn, "전체 색상 선택 열기");
+        btn.Click += (_, _) =>
         {
             using var dlg = new System.Windows.Forms.ColorDialog
             {
@@ -1987,24 +1881,6 @@ public partial class EditorWindow : Window
         "Number" => "번호", "Select" => "선택", "Eraser" => "지우개",
         _ => "펜"
     };
-
-    private void OnMicroAdClick(object sender, MouseButtonEventArgs e)
-    {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "mailto:popolong@naver.com?subject=신캡쳐 문의/제휴",
-            UseShellExecute = true
-        });
-    }
-
-    private void OnHistoryBannerClick(object sender, MouseButtonEventArgs e)
-    {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "https://contents.premium.naver.com/market/ai",
-            UseShellExecute = true
-        });
-    }
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
@@ -2099,7 +1975,7 @@ public partial class EditorWindow : Window
         RefreshOcrBanner();
         SetStatus("OCR 실행 중...");
         OcrPanel.Visibility = Visibility.Visible;
-        OcrPanelTitle.Text = "🔤 텍스트 추출";
+        OcrPanelTitle.Text = "텍스트 추출";
         OcrPanelMeta.Text = "추출 중…";
         OcrTextBox.Text = "";
         OcrSourceLangLabel.Text = "";
@@ -2114,7 +1990,7 @@ public partial class EditorWindow : Window
             var result = await _ocrService.ExtractAsync(_sourceImage, currentSettings);
             if (result.Outcome == EditorOcrOutcome.LanguagePackMissing)
             {
-                OcrPanelTitle.Text = "🔤 텍스트 추출";
+                OcrPanelTitle.Text = "텍스트 추출";
                 OcrPanelMeta.Text = "OCR 언어팩 필요";
                 OcrTextBox.Text =
                     $"설정된 언어({currentSettings.Ocr.Language})의 OCR 언어팩이 설치되어 있지 않습니다.\n" +
@@ -2135,7 +2011,7 @@ public partial class EditorWindow : Window
 
             if (result.Outcome == EditorOcrOutcome.Failed)
             {
-                OcrPanelTitle.Text = "🔤 텍스트 추출";
+                OcrPanelTitle.Text = "텍스트 추출";
                 OcrPanelMeta.Text = "실패";
                 OcrTextBox.Text = result.ErrorMessage ?? "";
                 SetStatus("OCR 실패");
@@ -2146,7 +2022,7 @@ public partial class EditorWindow : Window
             var text = result.Text;
             OcrTextBox.Text = text;
             var fallbackNote = result.UsedFallback ? " (폴백)" : "";
-            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelTitle.Text = "텍스트 추출";
             OcrPanelMeta.Text = $"{text.Length}자";
             OcrSourceLangLabel.Text = result.LanguageTag + fallbackNote;
             SetStatus($"OCR 완료 ({text.Length}자)");
@@ -2173,7 +2049,7 @@ public partial class EditorWindow : Window
         }
         catch (Exception ex)
         {
-            OcrPanelTitle.Text = "🔤 텍스트 추출";
+            OcrPanelTitle.Text = "텍스트 추출";
             OcrPanelMeta.Text = "실패";
             OcrTextBox.Text = ex.Message;
             SetStatus("OCR 실패");

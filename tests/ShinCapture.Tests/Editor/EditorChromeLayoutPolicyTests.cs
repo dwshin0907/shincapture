@@ -6,8 +6,8 @@ public class EditorChromeLayoutPolicyTests
 {
     [Theory]
     [InlineData(1600, EditorChromeMode.Comfortable, true, true, 180)]
-    [InlineData(1320, EditorChromeMode.Comfortable, true, true, 180)]
-    [InlineData(1319, EditorChromeMode.Compact, false, true, 180)]
+    [InlineData(1500, EditorChromeMode.Comfortable, true, true, 180)]
+    [InlineData(1499, EditorChromeMode.Compact, false, true, 180)]
     [InlineData(1100, EditorChromeMode.Compact, false, true, 180)]
     [InlineData(850, EditorChromeMode.Compact, false, true, 180)]
     [InlineData(849, EditorChromeMode.Narrow, false, false, 0)]
@@ -30,7 +30,7 @@ public class EditorChromeLayoutPolicyTests
     [Fact]
     public void KeepsDocumentedBreakpointContract()
     {
-        Assert.Equal(1320, EditorChromeLayoutPolicy.ComfortableWidth);
+        Assert.Equal(1500, EditorChromeLayoutPolicy.ComfortableWidth);
         Assert.Equal(850, EditorChromeLayoutPolicy.CompactWidth);
     }
 }

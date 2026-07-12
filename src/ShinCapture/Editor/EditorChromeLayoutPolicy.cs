@@ -15,7 +15,7 @@ public readonly record struct EditorChromeLayout(
 
 public static class EditorChromeLayoutPolicy
 {
-    public const double ComfortableWidth = 1320;
+    public const double ComfortableWidth = 1500;
     public const double CompactWidth = 850;
 
     public static EditorChromeLayout Resolve(double width) => width switch
