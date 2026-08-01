@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 
@@ -21,24 +22,53 @@ public static class ScreenHelper
     public static Bitmap CaptureFullScreen()
     {
         var bounds = GetPhysicalScreenBounds();
-
         var desktopWnd = NativeMethods.GetDesktopWindow();
-        var desktopDc = NativeMethods.GetWindowDC(desktopWnd);
-        var memDc = NativeMethods.CreateCompatibleDC(desktopDc);
-        var hBitmap = NativeMethods.CreateCompatibleBitmap(desktopDc, bounds.Width, bounds.Height);
-        var oldBitmap = NativeMethods.SelectObject(memDc, hBitmap);
+        IntPtr desktopDc = IntPtr.Zero;
+        IntPtr memoryDc = IntPtr.Zero;
+        IntPtr hBitmap = IntPtr.Zero;
+        IntPtr oldBitmap = IntPtr.Zero;
+        try
+        {
+            desktopDc = NativeMethods.GetWindowDC(desktopWnd);
+            if (desktopDc == IntPtr.Zero) throw new Win32Exception();
 
-        NativeMethods.BitBlt(memDc, 0, 0, bounds.Width, bounds.Height,
-            desktopDc, bounds.Left, bounds.Top, NativeMethods.SRCCOPY);
+            memoryDc = NativeMethods.CreateCompatibleDC(desktopDc);
+            if (memoryDc == IntPtr.Zero) throw new Win32Exception();
 
-        NativeMethods.SelectObject(memDc, oldBitmap);
-        var bitmap = Image.FromHbitmap(hBitmap);
+            hBitmap = NativeMethods.CreateCompatibleBitmap(
+                desktopDc,
+                bounds.Width,
+                bounds.Height);
+            if (hBitmap == IntPtr.Zero) throw new Win32Exception();
 
-        NativeMethods.DeleteObject(hBitmap);
-        NativeMethods.DeleteDC(memDc);
-        NativeMethods.ReleaseDC(desktopWnd, desktopDc);
+            oldBitmap = NativeMethods.SelectObject(memoryDc, hBitmap);
+            if (oldBitmap == IntPtr.Zero) throw new Win32Exception();
 
-        return bitmap;
+            if (!NativeMethods.BitBlt(
+                    memoryDc,
+                    0,
+                    0,
+                    bounds.Width,
+                    bounds.Height,
+                    desktopDc,
+                    bounds.Left,
+                    bounds.Top,
+                    NativeMethods.SRCCOPY))
+            {
+                throw new Win32Exception();
+            }
+
+            return Image.FromHbitmap(hBitmap);
+        }
+        finally
+        {
+            if (oldBitmap != IntPtr.Zero && memoryDc != IntPtr.Zero)
+                NativeMethods.SelectObject(memoryDc, oldBitmap);
+            if (hBitmap != IntPtr.Zero) NativeMethods.DeleteObject(hBitmap);
+            if (memoryDc != IntPtr.Zero) NativeMethods.DeleteDC(memoryDc);
+            if (desktopDc != IntPtr.Zero)
+                NativeMethods.ReleaseDC(desktopWnd, desktopDc);
+        }
     }
 
     public static Bitmap CropBitmap(Bitmap source, Rectangle region)

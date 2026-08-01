@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -7,6 +9,7 @@ using System.Windows.Media.Imaging;
 using ShinCapture.Capture;
 using ShinCapture.Helpers;
 using ShinCapture.Models;
+using ShinCapture.Services;
 
 namespace ShinCapture.Views.Overlay;
 
@@ -15,6 +18,9 @@ public partial class CaptureOverlay : Window
     private ICaptureMode? _mode;
     private Bitmap? _screenBitmap;
     private readonly CaptureSettings _settings;
+    private readonly Stopwatch _pointerRenderStopwatch = Stopwatch.StartNew();
+    private readonly Stopwatch _magnifierStopwatch = Stopwatch.StartNew();
+    private bool _finishStarted;
 
     // Custom render host
     private readonly RenderDrawingVisual _renderVisual = new();
@@ -34,6 +40,7 @@ public partial class CaptureOverlay : Window
         MouseMove += OnMouseMove;
         MouseUp += OnMouseUp;
         SizeChanged += (_, _) => Redraw();
+        Closed += OnClosed;
     }
 
     // ── Public API ──────────────────────────────────────────────────
@@ -86,15 +93,25 @@ public partial class CaptureOverlay : Window
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
         _mode?.OnMouseMove(e);
-        Redraw();
+        System.Windows.Point position = e.GetPosition(this);
+
+        if (_pointerRenderStopwatch.ElapsedMilliseconds >= 16)
+        {
+            _pointerRenderStopwatch.Restart();
+            Redraw();
+
+            if (_settings.ShowCrosshair)
+                UpdateCrosshair(position);
+
+            if (_settings.ShowColorCode && _magnifierStopwatch.ElapsedMilliseconds >= 33)
+            {
+                _magnifierStopwatch.Restart();
+                UpdateMagnifier(position);
+            }
+        }
 
         // 모드가 요청하는 커서 적용 (없으면 기본 Cross)
         Cursor = _mode?.RequestedCursor ?? Cursors.Cross;
-
-        if (_settings.ShowCrosshair)
-            UpdateCrosshair(e.GetPosition(this));
-        if (_settings.ShowColorCode || true)
-            UpdateMagnifier(e.GetPosition(this));
 
         if (_mode?.IsComplete == true)
             FinishCapture();
@@ -113,6 +130,12 @@ public partial class CaptureOverlay : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (_finishStarted)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             Result = null;
@@ -233,9 +256,9 @@ public partial class CaptureOverlay : Window
 
     // ── Finish ──────────────────────────────────────────────────────
 
-    private void FinishCapture()
+    private async void FinishCapture()
     {
-        if (_screenBitmap == null || _mode == null) return;
+        if (_finishStarted || _screenBitmap == null || _mode == null) return;
 
         var region = _mode.GetSelectedRegion();
         if (region == null || region.Value.Width <= 0 || region.Value.Height <= 0)
@@ -245,35 +268,62 @@ public partial class CaptureOverlay : Window
             return;
         }
 
-        var cropped = ScreenHelper.CropBitmap(_screenBitmap, region.Value);
-
-        // 자유형 모드: 다각형 외부를 투명하게 마스킹 (bounding box → 진짜 올가미)
-        if (_mode is ShinCapture.Capture.FreeformCaptureMode ff)
+        _finishStarted = true;
+        IsHitTestVisible = false;
+        Cursor = Cursors.Wait;
+        Bitmap? cropped = null;
+        try
         {
-            var masked = ff.ApplyMask(cropped);
-            if (!ReferenceEquals(masked, cropped))
+            cropped = ScreenHelper.CropBitmap(_screenBitmap, region.Value);
+
+            // 마스크/GrabCut은 UI 스레드를 막지 않도록 백그라운드에서 처리한다.
+            if (_mode is ShinCapture.Capture.FreeformCaptureMode freeform)
             {
-                cropped.Dispose();
-                cropped = masked;
+                Bitmap input = cropped;
+                Bitmap masked = await Task.Run(() => freeform.ApplyMask(input));
+                if (!ReferenceEquals(masked, input))
+                {
+                    input.Dispose();
+                    cropped = masked;
+                }
             }
-        }
-        else if (_mode is ShinCapture.Capture.SmartCutCaptureMode sc)
-        {
-            var smart = sc.ApplyGrabCut(cropped);
-            if (!ReferenceEquals(smart, cropped))
+            else if (_mode is ShinCapture.Capture.SmartCutCaptureMode smartCut)
             {
-                cropped.Dispose();
-                cropped = smart;
+                Bitmap input = cropped;
+                Bitmap smart = await Task.Run(() => smartCut.ApplyGrabCut(input));
+                if (!ReferenceEquals(smart, input))
+                {
+                    input.Dispose();
+                    cropped = smart;
+                }
             }
+
+            Result = new CaptureResult
+            {
+                Image = cropped,
+                Region = region.Value
+            };
+            cropped = null;
         }
-
-        Result = new CaptureResult
+        catch (Exception ex)
         {
-            Image = cropped,
-            Region = region.Value
-        };
+            Result = null;
+            DiagnosticLog.Write("CaptureOverlay", "선택 영역 후처리 실패", ex);
+        }
+        finally
+        {
+            cropped?.Dispose();
+            Close();
+        }
+    }
 
-        Close();
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        ScreenImage.Source = null;
+        MagnifierImage.Source = null;
+        _mode = null;
+        _screenBitmap?.Dispose();
+        _screenBitmap = null;
     }
 }
 

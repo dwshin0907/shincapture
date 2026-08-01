@@ -1,5 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
@@ -19,6 +22,9 @@ public class ElementCaptureMode : ICaptureMode
 
     private System.Windows.Rect _elementBounds;
     private bool _hasElement = false;
+    private long _lastLookupTimestamp;
+    private int _lookupInProgress;
+    private static readonly long LookupIntervalTicks = Stopwatch.Frequency / 20;
 
     public bool IsComplete { get; private set; } = false;
     public bool IsCancelled { get; private set; } = false;
@@ -49,25 +55,55 @@ public class ElementCaptureMode : ICaptureMode
     public void OnMouseMove(MouseEventArgs e)
     {
         NativeMethods.GetCursorPos(out var cursorPt);
+        long now = Stopwatch.GetTimestamp();
+        if (now - _lastLookupTimestamp < LookupIntervalTicks) return;
+        _lastLookupTimestamp = now;
+        if (Interlocked.CompareExchange(ref _lookupInProgress, 1, 0) != 0) return;
+        LookupElementAsync(cursorPt);
+    }
+
+    private async void LookupElementAsync(NativeMethods.POINT cursorPoint)
+    {
         try
         {
-            var element = AutomationElement.FromPoint(new System.Windows.Point(cursorPt.X, cursorPt.Y));
-            if (element != null)
+            System.Windows.Rect? bounds = await Task.Run(() => FindElementBounds(cursorPoint));
+            if (bounds is { } found)
             {
-                var bounds = element.Current.BoundingRectangle;
-                if (!bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0)
-                {
-                    _elementBounds = bounds;
-                    _hasElement = true;
-                    return;
-                }
+                _elementBounds = found;
+                _hasElement = true;
+            }
+            else
+            {
+                _hasElement = false;
             }
         }
         catch
         {
-            // Automation may throw for certain elements; silently ignore
+            _hasElement = false;
         }
-        _hasElement = false;
+        finally
+        {
+            Interlocked.Exchange(ref _lookupInProgress, 0);
+        }
+    }
+
+    private static System.Windows.Rect? FindElementBounds(NativeMethods.POINT cursorPoint)
+    {
+        try
+        {
+            var element = AutomationElement.FromPoint(
+                new System.Windows.Point(cursorPoint.X, cursorPoint.Y));
+            if (element == null) return null;
+
+            System.Windows.Rect bounds = element.Current.BoundingRectangle;
+            return !bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0
+                ? bounds
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public void OnMouseUp(MouseButtonEventArgs e) { }

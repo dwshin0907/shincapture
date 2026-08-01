@@ -10,7 +10,7 @@ namespace ShinCapture.Editor;
 
 public static class EditorCompositeRenderer
 {
-    public static Bitmap Render(
+    public static BitmapSource RenderBitmapSource(
         BitmapSource sourceImage,
         IEnumerable<EditorObject> objects)
     {
@@ -21,12 +21,22 @@ public static class EditorCompositeRenderer
         {
             drawingContext.DrawImage(sourceImage, new Rect(0, 0, width, height));
             foreach (EditorObject editorObject in objects.Where(item => item.IsVisible))
-                editorObject.RenderWithTransform(drawingContext);
+            {
+                EditorObject exportObject = editorObject.Clone();
+                exportObject.IsSelected = false;
+                exportObject.RenderWithTransform(drawingContext);
+            }
         }
 
         var target = new RenderTargetBitmap(
             width, height, 96, 96, PixelFormats.Pbgra32);
         target.Render(visual);
-        return BitmapHelper.ToBitmap(target);
+        target.Freeze();
+        return target;
     }
+
+    public static Bitmap Render(
+        BitmapSource sourceImage,
+        IEnumerable<EditorObject> objects) =>
+        BitmapHelper.ToBitmap(RenderBitmapSource(sourceImage, objects));
 }

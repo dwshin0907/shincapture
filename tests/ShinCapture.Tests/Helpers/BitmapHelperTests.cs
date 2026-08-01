@@ -46,4 +46,43 @@ public class BitmapHelperTests
         Assert.Equal(200, pixels[6]); // R
         Assert.Equal(0, pixels[7]);   // A
     }
+
+    [Fact]
+    public void ToBitmap_ReturnsIndependentBitmapThatPreservesPixelsAndCanBeSaved()
+    {
+        using var original = new Bitmap(3, 2, PixelFormat.Format32bppArgb);
+        original.SetPixel(0, 0, Color.FromArgb(255, 11, 22, 33));
+        original.SetPixel(2, 1, Color.FromArgb(128, 201, 102, 53));
+        var source = BitmapHelper.ToBitmapSource(original);
+
+        using Bitmap converted = BitmapHelper.ToBitmap(source);
+
+        Assert.Equal(3, converted.Width);
+        Assert.Equal(2, converted.Height);
+        Assert.Equal(Color.FromArgb(255, 11, 22, 33), converted.GetPixel(0, 0));
+        Assert.Equal(Color.FromArgb(128, 201, 102, 53), converted.GetPixel(2, 1));
+
+        using var encoded = new MemoryStream();
+        converted.Save(encoded, ImageFormat.Png);
+        encoded.Position = 0;
+        using Image decoded = Image.FromStream(encoded);
+        Assert.Equal(3, decoded.Width);
+        Assert.Equal(2, decoded.Height);
+    }
+
+    [Fact]
+    public void EncodePng_ProducesDecodableImage()
+    {
+        using var bitmap = new Bitmap(5, 4, PixelFormat.Format32bppArgb);
+        using (Graphics graphics = Graphics.FromImage(bitmap))
+            graphics.Clear(Color.CornflowerBlue);
+        var source = BitmapHelper.ToBitmapSource(bitmap);
+
+        byte[] png = BitmapHelper.EncodePng(source);
+
+        using var stream = new MemoryStream(png);
+        using Image decoded = Image.FromStream(stream);
+        Assert.Equal(5, decoded.Width);
+        Assert.Equal(4, decoded.Height);
+    }
 }

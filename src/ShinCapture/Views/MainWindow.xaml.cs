@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ShinCapture.Capture;
 using ShinCapture.Helpers;
@@ -256,59 +257,92 @@ public partial class MainWindow : Window
             RunOcrAndNotify(result.Image);
             return;
         }
-        // 캡쳐 즉시 클립보드에 복사 (모든 모드 공통, PNG 형식만 — 자유형 알파 보존)
-        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(result.Image));
 
-        switch (_settings.Capture.AfterCapture)
+        var stopwatch = Stopwatch.StartNew();
+        long convertedAtMs = 0;
+        try
         {
-            case AfterCaptureAction.OpenEditor:
-                bool autoOcr = (_lastCaptureMode == CaptureMode.Translate);
-                bool autoTranslate = autoOcr && _editorAutoTranslate;
-                _editorAutoTranslate = false;
-                if (_editorWindow != null)
-                {
-                    _editorWindow.LoadNewCapture(result.Image, autoOcr, autoTranslate);
-                    _editorWindow.Show();
-                    _editorWindow.Topmost = true;
-                    _editorWindow.Activate();
-                    _editorWindow.Topmost = false;
-                }
-                else
-                {
-                    _editorWindow = new EditorWindow(result.Image, _saveManager, _settings, _settingsManager);
-                    SubscribeCaptureRequested(_editorWindow);
-                    if (autoOcr)
+            BitmapSource imageSource = BitmapHelper.ToBitmapSource(result.Image);
+            convertedAtMs = stopwatch.ElapsedMilliseconds;
+
+            bool shouldCopy = _settings.Save.CopyToClipboard ||
+                              _settings.Capture.AfterCapture == AfterCaptureAction.ClipboardOnly;
+            if (shouldCopy)
+                _ = ClipboardImageService.SetImageAsync(imageSource);
+
+            switch (_settings.Capture.AfterCapture)
+            {
+                case AfterCaptureAction.OpenEditor:
+                    bool autoOcr = _lastCaptureMode == CaptureMode.Translate;
+                    bool autoTranslate = autoOcr && _editorAutoTranslate;
+                    _editorAutoTranslate = false;
+                    if (_editorWindow != null)
                     {
-                        bool localAutoTranslate = autoTranslate;
-                        _editorWindow.Loaded += (_, _) =>
-                            _editorWindow.Dispatcher.BeginInvoke(
-                                new Action(() => _editorWindow.TriggerAutoOcr(localAutoTranslate)),
-                                System.Windows.Threading.DispatcherPriority.Background);
+                        _editorWindow.LoadNewCapture(imageSource, autoOcr, autoTranslate);
+                        _editorWindow.Show();
+                        _editorWindow.Topmost = true;
+                        _editorWindow.Activate();
+                        _editorWindow.Topmost = false;
                     }
-                    _editorWindow.Show();
-                    _editorWindow.Activate();
-                }
-                break;
-            case AfterCaptureAction.SaveDirectly:
-                var savedPath = _saveManager.SaveAuto(result.Image, _settings);
-                break;
-            case AfterCaptureAction.ClipboardOnly:
-                // 이미 위에서 복사됨
-                break;
+                    else
+                    {
+                        _editorWindow = new EditorWindow(
+                            imageSource,
+                            _saveManager,
+                            _settings,
+                            _settingsManager);
+                        SubscribeCaptureRequested(_editorWindow);
+                        if (autoOcr)
+                        {
+                            bool localAutoTranslate = autoTranslate;
+                            _editorWindow.Loaded += (_, _) =>
+                                _editorWindow.Dispatcher.BeginInvoke(
+                                    new Action(() => _editorWindow.TriggerAutoOcr(localAutoTranslate)),
+                                    DispatcherPriority.Background);
+                        }
+                        _editorWindow.Show();
+                        _editorWindow.Activate();
+                    }
+                    break;
+
+                case AfterCaptureAction.SaveDirectly:
+                    _saveManager.SaveAuto(result.Image, _settings);
+                    break;
+
+                case AfterCaptureAction.ClipboardOnly:
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Capture", "캡처 결과 처리 실패", ex);
+            _trayIcon.ShowBalloonTip(
+                4000,
+                "신캡쳐 — 캡처 처리 실패",
+                ex.Message,
+                System.Windows.Forms.ToolTipIcon.Error);
+        }
+        finally
+        {
+            result.Image.Dispose();
+            DiagnosticLog.Write(
+                "Capture",
+                $"mode={_lastCaptureMode}, size={result.Region.Width}x{result.Region.Height}, " +
+                $"convert={convertedAtMs}ms, dispatch={stopwatch.ElapsedMilliseconds}ms");
         }
     }
 
     private async void RunOcrAndNotify(System.Drawing.Bitmap image)
     {
-        var langTag = Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
-        if (langTag == null)
-        {
-            PromptInstallLanguagePack(_settings.Ocr.Language);
-            return;
-        }
-
         try
         {
+            var langTag = Services.OcrService.ResolveLanguageOrFallback(_settings.Ocr.Language);
+            if (langTag == null)
+            {
+                PromptInstallLanguagePack(_settings.Ocr.Language);
+                return;
+            }
+
             var text = await Services.OcrService.ExtractTextAsync(
                 image, langTag, _settings.Ocr.UpscaleSmallImages);
 
@@ -327,6 +361,10 @@ public partial class MainWindow : Window
         {
             _trayIcon.ShowBalloonTip(4000, "신캡쳐 — OCR 실패",
                 ex.Message, System.Windows.Forms.ToolTipIcon.Error);
+        }
+        finally
+        {
+            image.Dispose();
         }
     }
 
@@ -575,7 +613,9 @@ public partial class MainWindow : Window
             var blank = new System.Drawing.Bitmap(800, 600, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (var g = System.Drawing.Graphics.FromImage(blank))
                 g.Clear(System.Drawing.Color.White);
-            _editorWindow = new EditorWindow(blank, _saveManager, _settings, _settingsManager);
+            BitmapSource blankSource = BitmapHelper.ToBitmapSource(blank);
+            blank.Dispose();
+            _editorWindow = new EditorWindow(blankSource, _saveManager, _settings, _settingsManager);
             SubscribeCaptureRequested(_editorWindow);
             _editorWindow.Show();
             _editorWindow.Activate();
