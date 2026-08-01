@@ -42,6 +42,7 @@ public class EditorCanvas : Canvas
 
     public event EventHandler<double>? ZoomChanged;
     public event EventHandler<IEditorCommand>? CommandRequested;
+    public event EventHandler? ContentChanged;
 
     public BitmapSource? BackgroundImage
     {
@@ -205,6 +206,7 @@ public class EditorCanvas : Canvas
             _draggingObject = null;
             ReleaseMouseCapture();
             InvalidateVisual();
+            ContentChanged?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -214,6 +216,7 @@ public class EditorCanvas : Canvas
             _currentTool?.OnMouseUp(ScreenToImage(e.GetPosition(this)), e);
             var cmd = _currentTool?.GetCommand();
             if (cmd != null) CommandRequested?.Invoke(this, cmd);
+            else ContentChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
     }

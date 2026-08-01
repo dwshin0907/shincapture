@@ -1,4 +1,5 @@
 using System.Drawing;
+using ShinCapture.Helpers;
 using ShinCapture.Services;
 
 namespace ShinCapture.Tests.Services;
@@ -84,6 +85,44 @@ public sealed class DragExportServiceTests : IDisposable
 
         Assert.False(File.Exists(first));
         Assert.True(File.Exists(second));
+        Assert.Single(Directory.GetFiles(_tempDir, "ShinCapture_*.png"));
+    }
+
+    [Fact]
+    public void BitmapSourceOverloadCreatesDecodablePngWithoutPartialFile()
+    {
+        var service = new DragExportService(
+            _tempDir, TimeSpan.FromHours(24), maxFiles: 100, maxBytes: 1024 * 1024);
+        using var bitmap = new Bitmap(9, 7);
+        var source = BitmapHelper.ToBitmapSource(bitmap);
+
+        string path = service.CreatePng(source);
+
+        Assert.True(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(_tempDir, "*.tmp"));
+        using Image decoded = Image.FromFile(path);
+        Assert.Equal(9, decoded.Width);
+        Assert.Equal(7, decoded.Height);
+    }
+
+    [Fact]
+    public void CleanupDoesNotDeleteProtectedDragFile()
+    {
+        var service = new DragExportService(
+            _tempDir, TimeSpan.FromHours(24), maxFiles: 1, maxBytes: 1024 * 1024);
+        var now = new DateTimeOffset(2026, 7, 12, 12, 0, 0, TimeSpan.Zero);
+        using var bitmap = new Bitmap(4, 4);
+        string first = service.CreatePng(bitmap, now);
+
+        using (service.Protect(first))
+        {
+            string second = service.CreatePng(bitmap, now.AddMilliseconds(1));
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+        }
+
+        service.Cleanup(now.AddMilliseconds(2));
+        Assert.False(File.Exists(first));
         Assert.Single(Directory.GetFiles(_tempDir, "ShinCapture_*.png"));
     }
 

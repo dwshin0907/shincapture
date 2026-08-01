@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Windows.Media.Imaging;
 
 namespace ShinCapture.Services;
 
@@ -17,6 +18,8 @@ public sealed class DragExportService
     private readonly TimeSpan _retention;
     private readonly int _maxFiles;
     private readonly long _maxBytes;
+    private readonly object _sync = new();
+    private readonly HashSet<string> _protectedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public DragExportService(
         string? directory = null,
@@ -40,9 +43,53 @@ public sealed class DragExportService
     public string CreatePng(Bitmap bitmap, DateTimeOffset? now = null)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
+        lock (_sync)
+        {
+            return CreatePngCore(
+                path => bitmap.Save(path, ImageFormat.Png),
+                now);
+        }
+    }
+
+    public string CreatePng(BitmapSource source, DateTimeOffset? now = null)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        lock (_sync)
+        {
+            return CreatePngCore(path =>
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(source));
+                using var stream = new FileStream(
+                    path,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None);
+                encoder.Save(stream);
+            }, now);
+        }
+    }
+
+    public void Cleanup(DateTimeOffset? now = null)
+    {
+        lock (_sync)
+            Cleanup(now, protectedPath: null);
+    }
+
+    public IDisposable Protect(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string fullPath = Path.GetFullPath(path);
+        lock (_sync)
+            _protectedPaths.Add(fullPath);
+        return new ProtectedPathLease(this, fullPath);
+    }
+
+    private string CreatePngCore(Action<string> save, DateTimeOffset? now)
+    {
         DateTimeOffset timestamp = now ?? DateTimeOffset.Now;
         Directory.CreateDirectory(_directory);
-        Cleanup(timestamp);
+        Cleanup(timestamp, protectedPath: null);
 
         string fileName =
             $"ShinCapture_{timestamp:yyyyMMdd_HHmmss_fff}_{Guid.NewGuid():N}.png";
@@ -51,7 +98,7 @@ public sealed class DragExportService
 
         try
         {
-            bitmap.Save(partialPath, ImageFormat.Png);
+            save(partialPath);
             File.Move(partialPath, finalPath);
             Cleanup(timestamp, finalPath);
             return finalPath;
@@ -61,8 +108,6 @@ public sealed class DragExportService
             TryDelete(partialPath);
         }
     }
-
-    public void Cleanup(DateTimeOffset? now = null) => Cleanup(now, protectedPath: null);
 
     private void Cleanup(DateTimeOffset? now, string? protectedPath)
     {
@@ -87,7 +132,7 @@ public sealed class DragExportService
 
         foreach (FileInfo expired in files
                      .Where(file => file.LastWriteTimeUtc < cutoffUtc &&
-                                    !PathsEqual(file.FullName, protectedPath))
+                                    !IsProtected(file.FullName, protectedPath))
                      .ToList())
         {
             TryDelete(expired.FullName);
@@ -98,7 +143,7 @@ public sealed class DragExportService
         while (files.Count > _maxFiles || totalBytes > _maxBytes)
         {
             FileInfo? oldest = files.FirstOrDefault(file =>
-                !PathsEqual(file.FullName, protectedPath));
+                !IsProtected(file.FullName, protectedPath));
             if (oldest == null) break;
 
             files.Remove(oldest);
@@ -112,6 +157,16 @@ public sealed class DragExportService
             Path.GetFullPath(path),
             Path.GetFullPath(other),
             StringComparison.OrdinalIgnoreCase);
+
+    private bool IsProtected(string path, string? additionallyProtectedPath) =>
+        PathsEqual(path, additionallyProtectedPath) ||
+        _protectedPaths.Contains(Path.GetFullPath(path));
+
+    private void ReleaseProtection(string path)
+    {
+        lock (_sync)
+            _protectedPaths.Remove(path);
+    }
 
     private IEnumerable<string> SafeGetFiles(string pattern)
     {
@@ -155,6 +210,25 @@ public sealed class DragExportService
         catch
         {
             return false;
+        }
+    }
+
+    private sealed class ProtectedPathLease : IDisposable
+    {
+        private DragExportService? _owner;
+        private readonly string _path;
+
+        public ProtectedPathLease(DragExportService owner, string path)
+        {
+            _owner = owner;
+            _path = path;
+        }
+
+        public void Dispose()
+        {
+            DragExportService? owner =
+                System.Threading.Interlocked.Exchange(ref _owner, null);
+            owner?.ReleaseProtection(_path);
         }
     }
 }

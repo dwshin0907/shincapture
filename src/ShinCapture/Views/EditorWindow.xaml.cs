@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -12,6 +15,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Controls.Primitives;
+using System.Windows.Threading;
 using ShinCapture.Editor;
 using ShinCapture.Editor.Tools;
 using ShinCapture.Editor.Objects;
@@ -32,7 +36,6 @@ public partial class EditorWindow : Window
     private readonly EditorOcrService _ocrService = new();
     private readonly DragExportService _dragExportService = new();
     private BitmapSource _sourceImage;
-    private Bitmap _sourceBitmap;
     private ITool? _activeTool;
     private readonly Dictionary<string, Button> _toolButtons = new();
     private readonly Dictionary<string, TextBlock> _toolLabels = new();
@@ -44,6 +47,11 @@ public partial class EditorWindow : Window
     private static readonly List<BitmapSource> _captureHistory = new();
     private const int MaxHistory = 50;
     private readonly Dictionary<BitmapSource, Border> _historyCards = new();
+    private readonly Dictionary<BitmapSource, TextBlock> _historyIndexLabels = new();
+    private readonly Dictionary<BitmapSource, DragExportState> _dragExportStates = new();
+    private readonly SemaphoreSlim _dragExportPreparationGate = new(1, 1);
+    private bool _suppressDragExportInvalidation;
+    private bool _isClosed;
 
     /// <summary>편집기에서 새 캡쳐를 요청. (mode, autoTranslate)</summary>
     public event Action<Models.CaptureMode, bool>? CaptureRequested;
@@ -56,26 +64,28 @@ public partial class EditorWindow : Window
     private bool _applyingWindowSizingPolicy;
     private HwndSource? _hwndSource;
 
-    public EditorWindow(Bitmap capturedImage, SaveManager saveManager, AppSettings settings, SettingsManager? settingsManager = null)
+    public EditorWindow(BitmapSource capturedImage, SaveManager saveManager, AppSettings settings, SettingsManager? settingsManager = null)
     {
+        ArgumentNullException.ThrowIfNull(capturedImage);
         InitializeComponent();
         _saveManager = saveManager;
         _settings = settings;
         _settingsManager = settingsManager;
         _dragExportService.Cleanup();
-        _sourceBitmap = capturedImage;
-        _sourceImage = BitmapHelper.ToBitmapSource(capturedImage);
+        _sourceImage = EnsureFrozen(capturedImage);
 
         // 캡쳐 기록에 추가
         AddToHistory(_sourceImage);
 
         Canvas.Objects = _objects;
         Canvas.CommandRequested += OnCommandRequested;
+        Canvas.ContentChanged += OnCanvasContentChanged;
         Canvas.ZoomChanged += (_, zoom) => UpdateZoomDisplay(zoom);
-        _commandStack.Changed += (_, _) => { Canvas.InvalidateVisual(); UpdateStatus(); };
+        _commandStack.Changed += OnCommandStackChanged;
 
         BuildToolbar();
         BuildHistory();
+        _ = ScheduleDragExportPreparation(_sourceImage);
         UpdateStatus();
 
         PreviewKeyDown += OnEditorKeyDown;
@@ -256,19 +266,23 @@ public partial class EditorWindow : Window
     /// <summary>기존 에디터에 새 캡쳐를 로드 (창을 재사용)</summary>
     /// <param name="autoOcr">true이면 로드 직후 OCR을 자동 실행 (Translate 모드 전용)</param>
     /// <param name="autoTranslate">true이면 OCR 직후 자동 번역 실행 (번역 버튼 흐름 전용)</param>
-    public void LoadNewCapture(Bitmap capturedImage, bool autoOcr = false, bool autoTranslate = false)
+    public void LoadNewCapture(BitmapSource capturedImage, bool autoOcr = false, bool autoTranslate = false)
     {
+        ArgumentNullException.ThrowIfNull(capturedImage);
         // 현재 편집 상태 저장
         SaveCurrentObjects();
+        CancelPendingDragExportPreparation(_sourceImage);
 
-        _sourceBitmap = capturedImage;
-        _sourceImage = BitmapHelper.ToBitmapSource(capturedImage);
+        _sourceImage = EnsureFrozen(capturedImage);
 
         AddToHistory(_sourceImage);
 
         _objects.Clear();
-        _commandStack.Clear();
+        _suppressDragExportInvalidation = true;
+        try { _commandStack.Clear(); }
+        finally { _suppressDragExportInvalidation = false; }
         _activeTool?.Reset();
+        _ = ScheduleDragExportPreparation(_sourceImage);
 
         // Window가 Hidden이면 먼저 visible로. SizeWindowToImage의 chrome 측정과
         // ScrollViewer ViewportWidth 갱신은 visible 상태에서만 정확.
@@ -324,15 +338,19 @@ public partial class EditorWindow : Window
     {
         // 현재 편집 상태 저장
         SaveCurrentObjects();
+        CancelPendingDragExportPreparation(_sourceImage);
 
         _sourceImage = image;
         _activeTool?.Reset();
-        _commandStack.Clear();
+        _suppressDragExportInvalidation = true;
+        try { _commandStack.Clear(); }
+        finally { _suppressDragExportInvalidation = false; }
 
         // 저장된 편집 상태 복원
         _objects.Clear();
         if (_captureObjects.TryGetValue(image, out var saved))
             _objects.AddRange(saved);
+        _ = ScheduleDragExportPreparation(image);
 
         if (!IsVisible) Show();
         UpdateLayout();
@@ -340,7 +358,7 @@ public partial class EditorWindow : Window
         UpdateLayout();
         Canvas.BackgroundImage = _sourceImage;
         Canvas.ApplyInitialZoom();
-        BuildHistory();
+        UpdateHistorySelection();
         if (focusHistoryItem)
             ScheduleHistoryFocus(image);
         UpdateStatus();
@@ -360,8 +378,16 @@ public partial class EditorWindow : Window
 
     private void SaveCurrentObjects()
     {
-        if (_sourceImage != null)
+        if (_sourceImage != null && _captureHistory.Contains(_sourceImage))
             _captureObjects[_sourceImage] = new List<EditorObject>(_objects);
+    }
+
+    private static BitmapSource EnsureFrozen(BitmapSource source)
+    {
+        if (source.IsFrozen) return source;
+        BitmapSource clone = source.Clone();
+        if (clone.CanFreeze) clone.Freeze();
+        return clone;
     }
 
     private bool _forceClose;
@@ -374,6 +400,14 @@ public partial class EditorWindow : Window
 
     private void OnEditorClosed(object? sender, EventArgs e)
     {
+        _isClosed = true;
+        foreach (DragExportState state in _dragExportStates.Values)
+        {
+            state.Cancelled = true;
+            state.PreparationCancellation?.Cancel();
+        }
+        _dragExportStates.Clear();
+        _captureObjects.Clear();
         _hwndSource?.RemoveHook(EditorWindowProc);
         _hwndSource = null;
     }
@@ -671,6 +705,21 @@ public partial class EditorWindow : Window
     {
         _commandStack.Execute(cmd);
         UpdateStatus();
+    }
+
+    private void OnCommandStackChanged(object? sender, EventArgs e)
+    {
+        Canvas.InvalidateVisual();
+        UpdateStatus();
+        if (_suppressDragExportInvalidation) return;
+
+        InvalidateDragExport(_sourceImage);
+    }
+
+    private void OnCanvasContentChanged(object? sender, EventArgs e)
+    {
+        if (!_suppressDragExportInvalidation)
+            InvalidateDragExport(_sourceImage);
     }
 
     private Button CreateToolButton(EditorToolDescriptor tool)
@@ -1499,20 +1548,74 @@ public partial class EditorWindow : Window
 
     // ── 캡쳐 기록 ──────────────────────────────────────────────
 
-    private static void AddToHistory(BitmapSource image)
+    private void AddToHistory(BitmapSource image)
     {
         _captureHistory.Insert(0, image);
-        while (_captureHistory.Count > MaxHistory)
+        int configuredMax = Math.Clamp(
+            _settings.RecentCaptures?.MaxCount ?? MaxHistory,
+            1,
+            MaxHistory);
+        int retainedCount = CaptureHistoryRetentionPolicy.GetRetainedCount(
+            _captureHistory.Select(EstimateHistoryImageBytes),
+            configuredMax,
+            CaptureHistoryRetentionPolicy.DefaultMaxBytes);
+
+        while (_captureHistory.Count > retainedCount)
+        {
+            BitmapSource removed = _captureHistory[^1];
             _captureHistory.RemoveAt(_captureHistory.Count - 1);
+            RemoveCaptureState(removed);
+        }
+    }
+
+    private static long EstimateHistoryImageBytes(BitmapSource image) =>
+        CaptureHistoryRetentionPolicy.EstimateBytes(
+            image.PixelWidth,
+            image.PixelHeight,
+            image.Format.BitsPerPixel);
+
+    private void UpdateHistorySelection()
+    {
+        foreach ((BitmapSource image, Border card) in _historyCards)
+        {
+            bool isSelected = image == _sourceImage;
+            card.BorderThickness = new Thickness(isSelected ? 2 : 1);
+            card.BorderBrush = isSelected
+                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                : (System.Windows.Media.Brush)FindResource("DividerBrush");
+            KeyboardNavigation.SetIsTabStop(card, isSelected);
+        }
     }
 
     private void BuildHistory()
     {
+        var reusableCards = new Dictionary<BitmapSource, Border>(_historyCards);
+        var reusableIndexLabels = new Dictionary<BitmapSource, TextBlock>(_historyIndexLabels);
         _historyCards.Clear();
+        _historyIndexLabels.Clear();
         HistoryPanel.Children.Clear();
         for (int i = 0; i < _captureHistory.Count; i++)
         {
             var img = _captureHistory[i];
+            if (reusableCards.TryGetValue(img, out Border? reusableCard) &&
+                reusableIndexLabels.TryGetValue(img, out TextBlock? reusableIndexLabel))
+            {
+                bool reusableIsSelected = img == _sourceImage;
+                reusableCard.BorderThickness = new Thickness(reusableIsSelected ? 2 : 1);
+                reusableCard.BorderBrush = reusableIsSelected
+                    ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                    : (System.Windows.Media.Brush)FindResource("DividerBrush");
+                KeyboardNavigation.SetIsTabStop(reusableCard, reusableIsSelected);
+                reusableIndexLabel.Text = $"#{i + 1}";
+                AutomationProperties.SetName(
+                    reusableCard,
+                    $"캡처 결과 {i + 1}, {img.PixelWidth} × {img.PixelHeight}");
+                _historyCards[img] = reusableCard;
+                _historyIndexLabels[img] = reusableIndexLabel;
+                HistoryPanel.Children.Add(reusableCard);
+                continue;
+            }
+
             var thumb = new System.Windows.Controls.Image
             {
                 Source = img,
@@ -1538,13 +1641,14 @@ public partial class EditorWindow : Window
             var footerGrid = new Grid();
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            footerGrid.Children.Add(new TextBlock
+            var indexLabel = new TextBlock
             {
                 Text = $"#{i + 1}",
                 FontSize = 10,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush")
-            });
+            };
+            footerGrid.Children.Add(indexLabel);
             var dimensions = new TextBlock
             {
                 Text = $"{img.PixelWidth}×{img.PixelHeight}",
@@ -1596,19 +1700,21 @@ public partial class EditorWindow : Window
             ctx.Items.Add(miOpen);
 
             var miCopy = new MenuItem { Header = "클립보드 복사" };
-            miCopy.Click += (_, _) =>
+            miCopy.Click += async (_, _) =>
             {
-                BitmapHelper.SetClipboardPng(localImg);
-                StatusText.Text = "클립보드에 복사됨";
+                StatusText.Text = "클립보드에 복사 중...";
+                bool copied = await CopyImageToClipboardAsync(localImg);
+                StatusText.Text = copied
+                    ? "클립보드에 복사됨"
+                    : "클립보드에 복사하지 못했습니다";
             };
             ctx.Items.Add(miCopy);
 
             var miSave = new MenuItem { Header = "다른 이름으로 저장" };
             miSave.Click += (_, _) =>
             {
-                var bmp = BitmapHelper.ToBitmap(localImg);
+                using Bitmap bmp = BitmapHelper.ToBitmap(localImg);
                 var path = _saveManager.SaveAs(bmp);
-                bmp.Dispose();
                 if (path != null) StatusText.Text = $"저장됨: {path}";
             };
             ctx.Items.Add(miSave);
@@ -1617,9 +1723,8 @@ public partial class EditorWindow : Window
             var miCopyPath = new MenuItem { Header = "저장 경로 복사", IsEnabled = false };
             miQuickSave.Click += (_, _) =>
             {
-                var bmp = BitmapHelper.ToBitmap(localImg);
+                using Bitmap bmp = BitmapHelper.ToBitmap(localImg);
                 var path = _saveManager.SaveAuto(bmp, _settings);
-                bmp.Dispose();
                 StatusText.Text = $"저장됨: {path}";
                 miCopyPath.IsEnabled = true;
                 miCopyPath.Tag = path;
@@ -1655,7 +1760,7 @@ public partial class EditorWindow : Window
             miDelete.Click += (_, _) =>
             {
                 _captureHistory.Remove(localImg);
-                _captureObjects.Remove(localImg);
+                RemoveCaptureState(localImg);
                 if (localImg == _sourceImage && _captureHistory.Count > 0)
                     LoadFromHistory(_captureHistory[0]);
                 else
@@ -1667,6 +1772,7 @@ public partial class EditorWindow : Window
             border.ContextMenu = ctx;
 
             _historyCards[img] = border;
+            _historyIndexLabels[img] = indexLabel;
             HistoryPanel.Children.Add(border);
         }
     }
@@ -1682,8 +1788,11 @@ public partial class EditorWindow : Window
             isTrackingLeftDrag = true;
             card.Focus();
             card.CaptureMouse();
+            if (image == _sourceImage) SaveCurrentObjects();
+            _ = ScheduleDragExportPreparation(image);
             e.Handled = true;
         };
+        card.MouseEnter += (_, _) => _ = ScheduleDragExportPreparation(image);
 
         card.PreviewMouseMove += (_, e) =>
         {
@@ -1717,23 +1826,44 @@ public partial class EditorWindow : Window
         };
     }
 
-    private void StartHistoryCardDrag(Border card, BitmapSource image)
+    private async void StartHistoryCardDrag(Border card, BitmapSource image)
     {
-        string? path = null;
+        if (!TryGetPreparedDragPath(image, out string? preparedPath))
+        {
+            Task<string?>? preparation = ScheduleDragExportPreparation(image);
+            if (preparation == null)
+            {
+                StatusText.Text = "드래그할 캡처 기록을 찾을 수 없습니다";
+                return;
+            }
+
+            StatusText.Text = "드래그 파일 준비 중...";
+            DiagnosticLog.Write("Drag", "드래그 중 내보내기 파일 준비를 기다림");
+            preparedPath = await preparation;
+            if (preparedPath == null || !File.Exists(preparedPath))
+            {
+                StatusText.Text = "드래그 파일을 준비하지 못했습니다";
+                return;
+            }
+        }
+        string path = preparedPath!;
+
+        if (Mouse.LeftButton != MouseButtonState.Pressed)
+        {
+            StatusText.Text = "파일 준비 완료 · 마우스 버튼을 누른 채 다시 드래그하세요";
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
         try
         {
-            SaveCurrentObjects();
-            IEnumerable<EditorObject> objects = _captureObjects.TryGetValue(image, out var saved)
-                ? saved
-                : Array.Empty<EditorObject>();
-
-            using Bitmap rendered = EditorCompositeRenderer.Render(image, objects);
-            path = _dragExportService.CreatePng(rendered);
-            BitmapSource preview = BitmapHelper.ToBitmapSource(rendered);
-
+            using IDisposable pathLease = _dragExportService.Protect(path);
             var data = new DataObject();
             data.SetFileDropList(new StringCollection { path });
-            data.SetImage(preview);
+            string textPath = path.Contains(' ')
+                ? $"\"{path}\""
+                : path;
+            data.SetText(textPath, TextDataFormat.UnicodeText);
 
             card.Opacity = 0.62;
             DragDropEffects effect = System.Windows.DragDrop.DoDragDrop(
@@ -1741,15 +1871,216 @@ public partial class EditorWindow : Window
             StatusText.Text = effect == DragDropEffects.None
                 ? "드래그가 취소되었습니다"
                 : $"외부 앱으로 보냄: {Path.GetFileName(path)}";
+            DiagnosticLog.Write(
+                "Drag",
+                $"effect={effect}, elapsed={stopwatch.ElapsedMilliseconds}ms, file={Path.GetFileName(path)}");
         }
-        catch
+        catch (Exception ex)
         {
             StatusText.Text = "임시 이미지를 만들어 보낼 수 없습니다";
+            DiagnosticLog.Write("Drag", "OLE 드래그 실패", ex);
         }
         finally
         {
             card.Opacity = 1;
         }
+    }
+
+    private void InvalidateDragExport(BitmapSource image)
+    {
+        DragExportState state = GetDragExportState(image);
+        state.PreparationCancellation?.Cancel();
+        state.Generation++;
+        state.Path = null;
+        state.PreparationGeneration = -1;
+        state.PreparationTask = null;
+    }
+
+    private void CancelPendingDragExportPreparation(BitmapSource image)
+    {
+        if (!_dragExportStates.TryGetValue(image, out DragExportState? state) ||
+            state.PreparationTask is not { IsCompleted: false })
+        {
+            return;
+        }
+
+        state.PreparationCancellation?.Cancel();
+        state.PreparationGeneration = -1;
+        state.PreparationTask = null;
+    }
+
+    private DragExportState GetDragExportState(BitmapSource image)
+    {
+        if (_dragExportStates.TryGetValue(image, out DragExportState? state))
+            return state;
+
+        state = new DragExportState();
+        _dragExportStates[image] = state;
+        return state;
+    }
+
+    private Task<string?>? ScheduleDragExportPreparation(BitmapSource image)
+    {
+        if (_isClosed || !_captureHistory.Contains(image)) return null;
+        DragExportState state = GetDragExportState(image);
+        if (state.Path != null && File.Exists(state.Path))
+            return Task.FromResult<string?>(state.Path);
+        if (state.PreparationGeneration == state.Generation &&
+            state.PreparationTask is { IsCompleted: false } running)
+        {
+            return running;
+        }
+
+        int generation = state.Generation;
+        state.PreparationCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        var completion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        state.PreparationGeneration = generation;
+        state.PreparationTask = completion.Task;
+        state.PreparationCancellation = cancellation;
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            CompleteDragExportPreparationAsync(
+                image,
+                generation,
+                completion,
+                cancellation);
+        }), DispatcherPriority.Normal);
+        return completion.Task;
+    }
+
+    private async void CompleteDragExportPreparationAsync(
+        BitmapSource image,
+        int generation,
+        TaskCompletionSource<string?> completion,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            completion.TrySetResult(await PrepareDragExportAsync(
+                image,
+                generation,
+                cancellation.Token));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("DragPrepare", "드래그 파일 사전 생성 작업 실패", ex);
+            completion.TrySetResult(null);
+        }
+        finally
+        {
+            if (_dragExportStates.TryGetValue(image, out DragExportState? current) &&
+                ReferenceEquals(current.PreparationCancellation, cancellation))
+            {
+                current.PreparationCancellation = null;
+            }
+            cancellation.Dispose();
+        }
+    }
+
+    private async Task<string?> PrepareDragExportAsync(
+        BitmapSource image,
+        int generation,
+        CancellationToken cancellationToken)
+    {
+        if (_isClosed || !_captureHistory.Contains(image)) return null;
+        DragExportState state = GetDragExportState(image);
+        if (state.Cancelled || state.Generation != generation) return null;
+        if (state.Path != null && File.Exists(state.Path)) return state.Path;
+
+        var stopwatch = Stopwatch.StartNew();
+        bool enteredGate = false;
+        try
+        {
+            await _dragExportPreparationGate.WaitAsync(cancellationToken);
+            enteredGate = true;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (state.Cancelled || state.Generation != generation) return null;
+
+            IEnumerable<EditorObject> objects = image == _sourceImage
+                ? _objects
+                : _captureObjects.TryGetValue(image, out var saved)
+                    ? saved
+                    : Array.Empty<EditorObject>();
+            List<EditorObject> snapshot = objects.ToList();
+
+            BitmapSource exportImage = snapshot.Any(item => item.IsVisible)
+                ? EditorCompositeRenderer.RenderBitmapSource(image, snapshot)
+                : image;
+            long renderedAtMs = stopwatch.ElapsedMilliseconds;
+            string? path = await Task.Run(
+                () => state.Cancelled
+                    ? null
+                    : _dragExportService.CreatePng(exportImage),
+                cancellationToken);
+            if (path == null) return null;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!_dragExportStates.TryGetValue(image, out DragExportState? current) ||
+                current.Cancelled ||
+                current.Generation != generation)
+            {
+                return null;
+            }
+
+            current.Path = path;
+            DiagnosticLog.Write(
+                "DragPrepare",
+                $"render={renderedAtMs}ms, total={stopwatch.ElapsedMilliseconds}ms, " +
+                $"size={image.PixelWidth}x{image.PixelHeight}");
+            return path;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("DragPrepare", "드래그 파일 사전 생성 실패", ex);
+            return null;
+        }
+        finally
+        {
+            if (enteredGate) _dragExportPreparationGate.Release();
+        }
+    }
+
+    private bool TryGetPreparedDragPath(BitmapSource image, out string? path)
+    {
+        path = null;
+        if (!_dragExportStates.TryGetValue(image, out DragExportState? state) ||
+            state.Path == null ||
+            !File.Exists(state.Path))
+        {
+            return false;
+        }
+
+        path = state.Path;
+        return true;
+    }
+
+    private void RemoveCaptureState(BitmapSource image)
+    {
+        _captureObjects.Remove(image);
+        if (_dragExportStates.Remove(image, out DragExportState? state))
+        {
+            state.Cancelled = true;
+            state.PreparationCancellation?.Cancel();
+        }
+        _historyIndexLabels.Remove(image);
+        if (_historyCards.Remove(image, out Border? card))
+            HistoryPanel.Children.Remove(card);
+    }
+
+    private sealed class DragExportState
+    {
+        public int Generation { get; set; }
+        public int PreparationGeneration { get; set; } = -1;
+        public Task<string?>? PreparationTask { get; set; }
+        public CancellationTokenSource? PreparationCancellation { get; set; }
+        public bool Cancelled { get; set; }
+        public string? Path { get; set; }
     }
 
     private void OnHistorySaveAll(object sender, RoutedEventArgs e)
@@ -1767,11 +2098,10 @@ public partial class EditorWindow : Window
         for (int i = 0; i < _captureHistory.Count; i++)
         {
             var img = _captureHistory[i];
-            var bmp = BitmapHelper.ToBitmap(img);
+            using Bitmap bmp = BitmapHelper.ToBitmap(img);
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var path = Path.Combine(dialog.SelectedPath, $"신캡쳐_{timestamp}_{i + 1}.png");
             bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-            bmp.Dispose();
             saved++;
         }
         StatusText.Text = $"{saved}개 이미지 저장됨: {dialog.SelectedPath}";
@@ -1794,6 +2124,13 @@ public partial class EditorWindow : Window
         if (result != MessageBoxResult.Yes) return;
 
         _captureHistory.Clear();
+        _captureObjects.Clear();
+        foreach (DragExportState state in _dragExportStates.Values)
+        {
+            state.Cancelled = true;
+            state.PreparationCancellation?.Cancel();
+        }
+        _dragExportStates.Clear();
         BuildHistory();
         StatusText.Text = "캡처 기록을 비웠습니다";
     }
@@ -1978,31 +2315,36 @@ public partial class EditorWindow : Window
         _ => "펜"
     };
 
-    private void OnSaveClick(object sender, RoutedEventArgs e)
+    private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        var rendered = RenderFinalImage();
-        var path = _saveManager.SaveAuto(rendered, _settings);
+        BitmapSource renderedSource = RenderFinalImageSource();
+        using Bitmap rendered = BitmapHelper.ToBitmap(renderedSource);
+        string path = _saveManager.SaveAuto(rendered, _settings);
         StatusText.Text = $"저장됨: {path}";
         if (_settings.Save.CopyToClipboard)
-            BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
-        rendered.Dispose();
+        {
+            bool copied = await CopyImageToClipboardAsync(renderedSource);
+            if (!copied) StatusText.Text = $"저장됨: {path} · 클립보드 복사 실패";
+        }
     }
 
     private void OnSaveAsClick(object sender, RoutedEventArgs e)
     {
-        var rendered = RenderFinalImage();
-        var path = _saveManager.SaveAs(rendered);
+        BitmapSource renderedSource = RenderFinalImageSource();
+        using Bitmap rendered = BitmapHelper.ToBitmap(renderedSource);
+        string? path = _saveManager.SaveAs(rendered);
         if (path != null)
             StatusText.Text = $"저장됨: {path}";
-        rendered.Dispose();
     }
 
-    private void OnCopyClick(object sender, RoutedEventArgs e)
+    private async void OnCopyClick(object sender, RoutedEventArgs e)
     {
-        var rendered = RenderFinalImage();
-        BitmapHelper.SetClipboardPng(BitmapHelper.ToBitmapSource(rendered));
-        StatusText.Text = "클립보드에 복사됨";
-        rendered.Dispose();
+        BitmapSource renderedSource = RenderFinalImageSource();
+        StatusText.Text = "클립보드에 복사 중...";
+        bool copied = await CopyImageToClipboardAsync(renderedSource);
+        StatusText.Text = copied
+            ? "클립보드에 복사됨"
+            : "클립보드에 복사하지 못했습니다";
     }
 
     private void OnEditorSettingsClick(object sender, RoutedEventArgs e)
@@ -2036,8 +2378,23 @@ public partial class EditorWindow : Window
         RefreshOcrBanner();
     }
 
-    private Bitmap RenderFinalImage() =>
-        EditorCompositeRenderer.Render(_sourceImage, _objects);
+    private BitmapSource RenderFinalImageSource() =>
+        _objects.Any(item => item.IsVisible)
+            ? EditorCompositeRenderer.RenderBitmapSource(_sourceImage, _objects)
+            : _sourceImage;
+
+    private static async Task<bool> CopyImageToClipboardAsync(BitmapSource image)
+    {
+        try
+        {
+            return await ClipboardImageService.SetImageAsync(image);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Clipboard", "편집기 이미지 복사 실패", ex);
+            return false;
+        }
+    }
 
     private void SetStatus(string text)
     {
@@ -2126,7 +2483,7 @@ public partial class EditorWindow : Window
             if (_pendingAutoTranslate && !string.IsNullOrWhiteSpace(text))
             {
                 _pendingAutoTranslate = false;
-                Dispatcher.BeginInvoke(new Action(() => OnOcrTranslateClick(this, new RoutedEventArgs())),
+                _ = Dispatcher.BeginInvoke(new Action(() => OnOcrTranslateClick(this, new RoutedEventArgs())),
                     System.Windows.Threading.DispatcherPriority.Background);
             }
         }

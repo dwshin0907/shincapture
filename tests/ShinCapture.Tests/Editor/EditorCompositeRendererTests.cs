@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ShinCapture.Editor;
 using ShinCapture.Editor.Objects;
 using ShinCapture.Helpers;
@@ -58,6 +59,23 @@ public class EditorCompositeRendererTests
         Assert.True(center.R > 240);
         Assert.True(center.G > 240);
         Assert.True(center.B > 240);
+    }
+
+    [Fact]
+    public void RenderBitmapSource_ReturnsFrozenCrossThreadSafeImage()
+    {
+        BitmapSource result = RunInSta(() =>
+        {
+            using var sourceBitmap = CreateWhiteBitmap();
+            var source = BitmapHelper.ToBitmapSource(sourceBitmap);
+            return EditorCompositeRenderer.RenderBitmapSource(source, []);
+        });
+
+        Assert.True(result.IsFrozen);
+        Assert.Equal(20, result.PixelWidth);
+        Assert.Equal(20, result.PixelHeight);
+        using Bitmap converted = BitmapHelper.ToBitmap(result);
+        Assert.Equal(DrawingColor.White.ToArgb(), converted.GetPixel(10, 10).ToArgb());
     }
 
     private static Bitmap CreateWhiteBitmap()

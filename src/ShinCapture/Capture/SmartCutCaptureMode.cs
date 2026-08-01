@@ -140,19 +140,17 @@ public class SmartCutCaptureMode : ICaptureMode
 
         // BGR Mat 변환 (GrabCut은 3채널 입력 요구)
         using var src = BitmapConverter.ToMat(croppedBitmap);
-        Mat src3;
+        using var src3 = new Mat();
         if (src.Channels() == 4)
         {
-            src3 = new Mat();
             Cv2.CvtColor(src, src3, ColorConversionCodes.BGRA2BGR);
         }
         else if (src.Channels() == 3)
         {
-            src3 = src.Clone();
+            src.CopyTo(src3);
         }
         else
         {
-            src3 = new Mat();
             Cv2.CvtColor(src, src3, ColorConversionCodes.GRAY2BGR);
         }
 
@@ -175,49 +173,65 @@ public class SmartCutCaptureMode : ICaptureMode
         Cv2.Compare(mask, new Scalar((double)GrabCutClasses.FGD), fgMask2, CmpType.EQ);
         Cv2.BitwiseOr(fgMask, fgMask2, fgMask);
 
-        src3.Dispose();
-
         // BGRA 결과 비트맵 생성: 전경 픽셀은 원본 색 + 알파 255, 배경은 알파 0
         var result = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        var data = result.LockBits(
-            new Rectangle(0, 0, w, h),
-            System.Drawing.Imaging.ImageLockMode.WriteOnly,
-            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         try
         {
-            unsafe
+            var sourceData = croppedBitmap.LockBits(
+                new Rectangle(0, 0, w, h),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
             {
-                byte* dst = (byte*)data.Scan0;
-                int stride = data.Stride;
-                var indexer = fgMask.GetGenericIndexer<byte>();
-                for (int y = 0; y < h; y++)
+                var resultData = result.LockBits(
+                    new Rectangle(0, 0, w, h),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                try
                 {
-                    for (int x = 0; x < w; x++)
+                    unsafe
                     {
-                        int offset = y * stride + x * 4;
-                        if (indexer[y, x] != 0)
+                        for (int y = 0; y < h; y++)
                         {
-                            var src_pixel = croppedBitmap.GetPixel(x, y);
-                            dst[offset + 0] = src_pixel.B;
-                            dst[offset + 1] = src_pixel.G;
-                            dst[offset + 2] = src_pixel.R;
-                            dst[offset + 3] = 255;
-                        }
-                        else
-                        {
-                            dst[offset + 0] = 0;
-                            dst[offset + 1] = 0;
-                            dst[offset + 2] = 0;
-                            dst[offset + 3] = 0;
+                            byte* srcRow = (byte*)sourceData.Scan0 + y * sourceData.Stride;
+                            byte* dstRow = (byte*)resultData.Scan0 + y * resultData.Stride;
+                            byte* maskRow = (byte*)fgMask.Ptr(y);
+                            for (int x = 0; x < w; x++)
+                            {
+                                int offset = x * 4;
+                                if (maskRow[x] != 0)
+                                {
+                                    dstRow[offset + 0] = srcRow[offset + 0];
+                                    dstRow[offset + 1] = srcRow[offset + 1];
+                                    dstRow[offset + 2] = srcRow[offset + 2];
+                                    dstRow[offset + 3] = 255;
+                                }
+                                else
+                                {
+                                    dstRow[offset + 0] = 0;
+                                    dstRow[offset + 1] = 0;
+                                    dstRow[offset + 2] = 0;
+                                    dstRow[offset + 3] = 0;
+                                }
+                            }
                         }
                     }
                 }
+                finally
+                {
+                    result.UnlockBits(resultData);
+                }
             }
+            finally
+            {
+                croppedBitmap.UnlockBits(sourceData);
+            }
+            return result;
         }
-        finally
+        catch
         {
-            result.UnlockBits(data);
+            result.Dispose();
+            throw;
         }
-        return result;
     }
 }

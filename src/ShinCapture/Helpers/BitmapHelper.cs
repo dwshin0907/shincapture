@@ -2,6 +2,9 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace ShinCapture.Helpers;
@@ -36,12 +39,76 @@ public static class BitmapHelper
 
     public static Bitmap ToBitmap(BitmapSource source)
     {
+        ArgumentNullException.ThrowIfNull(source);
+
+        BitmapSource bgraSource = source;
+        if (source.Format != System.Windows.Media.PixelFormats.Bgra32)
+        {
+            var converted = new FormatConvertedBitmap(
+                source,
+                System.Windows.Media.PixelFormats.Bgra32,
+                destinationPalette: null,
+                alphaThreshold: 0);
+            converted.Freeze();
+            bgraSource = converted;
+        }
+
+        int width = bgraSource.PixelWidth;
+        int height = bgraSource.PixelHeight;
+        int sourceStride = checked(width * 4);
+        var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        try
+        {
+            BitmapData data = bitmap.LockBits(
+                new Rectangle(0, 0, width, height),
+                ImageLockMode.WriteOnly,
+                PixelFormat.Format32bppArgb);
+            try
+            {
+                if (data.Stride == sourceStride)
+                {
+                    bgraSource.CopyPixels(
+                        Int32Rect.Empty,
+                        data.Scan0,
+                        checked(data.Stride * height),
+                        data.Stride);
+                }
+                else
+                {
+                    var pixels = new byte[checked(sourceStride * height)];
+                    bgraSource.CopyPixels(pixels, sourceStride, 0);
+                    for (int y = 0; y < height; y++)
+                    {
+                        Marshal.Copy(
+                            pixels,
+                            y * sourceStride,
+                            IntPtr.Add(data.Scan0, y * data.Stride),
+                            sourceStride);
+                    }
+                }
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+
+            return bitmap;
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+    }
+
+    public static byte[] EncodePng(BitmapSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
         using var stream = new MemoryStream();
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
         encoder.Save(stream);
-        stream.Position = 0;
-        return new Bitmap(stream);
+        return stream.ToArray();
     }
 
     /// <summary>
@@ -53,30 +120,60 @@ public static class BitmapHelper
     /// </summary>
     public static void SetClipboardPng(BitmapSource source)
     {
-        if (source == null) return;
+        _ = TrySetClipboardPng(source, out _);
+    }
+
+    public static bool TrySetClipboardPng(BitmapSource source, out Exception? error)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        error = null;
+
         try
         {
-            // PNG 스트림 (알파 채널 보존)
-            var pngStream = new MemoryStream();
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(source));
-            encoder.Save(pngStream);
-            pngStream.Position = 0;
+            byte[] pngBytes = EncodePng(source);
+            using var pngStream = new MemoryStream(pngBytes, writable: false);
+            using var rawBitmap = ToBitmap(source);
+            using var flatBitmap = FlattenAlphaToWhite(rawBitmap);
 
-            // System.Drawing.Bitmap (흰배경 합성, CF_BITMAP/CF_DIB로 등록될 형식)
-            using var rawBmp = ToBitmap(source);
-            var flatBmp = FlattenAlphaToWhite(rawBmp);
+            var dataObject = new System.Windows.Forms.DataObject();
+            dataObject.SetData("PNG", autoConvert: false, pngStream);
+            dataObject.SetData(
+                System.Windows.Forms.DataFormats.Bitmap,
+                autoConvert: true,
+                flatBitmap);
 
-            var dataObj = new System.Windows.Forms.DataObject();
-            dataObj.SetData("PNG", false, pngStream);
-            dataObj.SetData(System.Windows.Forms.DataFormats.Bitmap, true, flatBmp);
-
-            System.Windows.Forms.Clipboard.SetDataObject(dataObj, copy: true);
+            int[] retryDelaysMs = [0, 15, 40, 80];
+            foreach (int delayMs in retryDelaysMs)
+            {
+                if (delayMs > 0) Thread.Sleep(delayMs);
+                try
+                {
+                    pngStream.Position = 0;
+                    System.Windows.Forms.Clipboard.SetDataObject(dataObject, copy: true);
+                    return true;
+                }
+                catch (ExternalException ex)
+                {
+                    error = ex;
+                }
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // 클립보드 접근 실패 시 표준 SetImage로 폴백
-            try { System.Windows.Clipboard.SetImage(source); } catch { }
+            error = ex;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetImage(source);
+            return true;
+        }
+        catch (Exception fallbackError)
+        {
+            error = error == null
+                ? fallbackError
+                : new AggregateException(error, fallbackError);
+            return false;
         }
     }
 

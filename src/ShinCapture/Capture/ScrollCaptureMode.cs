@@ -21,7 +21,8 @@ namespace ShinCapture.Capture;
 /// </summary>
 public class ScrollCaptureMode : ICaptureMode
 {
-    private Bitmap? _screenBitmap;
+    private int _screenWidth;
+    private int _screenHeight;
     private FrameworkElement? _overlay;
     private double _scaleX = 1.0, _scaleY = 1.0;
 
@@ -34,7 +35,8 @@ public class ScrollCaptureMode : ICaptureMode
 
     public void Initialize(Bitmap screenBitmap, FrameworkElement overlay)
     {
-        _screenBitmap = screenBitmap;
+        _screenWidth = screenBitmap.Width;
+        _screenHeight = screenBitmap.Height;
         _overlay = overlay;
         if (overlay.ActualWidth > 0 && screenBitmap.Width > 0)
             _scaleX = screenBitmap.Width / overlay.ActualWidth;
@@ -133,12 +135,12 @@ public class ScrollCaptureMode : ICaptureMode
         var bmpRegion = new Rectangle(
             region.X - vsL, region.Y - vsT, region.Width, region.Height);
 
-        if (_screenBitmap != null)
+        if (_screenWidth > 0 && _screenHeight > 0)
         {
-            bmpRegion.X = Math.Clamp(bmpRegion.X, 0, _screenBitmap.Width - 1);
-            bmpRegion.Y = Math.Clamp(bmpRegion.Y, 0, _screenBitmap.Height - 1);
-            bmpRegion.Width = Math.Min(bmpRegion.Width, _screenBitmap.Width - bmpRegion.X);
-            bmpRegion.Height = Math.Min(bmpRegion.Height, _screenBitmap.Height - bmpRegion.Y);
+            bmpRegion.X = Math.Clamp(bmpRegion.X, 0, _screenWidth - 1);
+            bmpRegion.Y = Math.Clamp(bmpRegion.Y, 0, _screenHeight - 1);
+            bmpRegion.Width = Math.Min(bmpRegion.Width, _screenWidth - bmpRegion.X);
+            bmpRegion.Height = Math.Min(bmpRegion.Height, _screenHeight - bmpRegion.Y);
         }
 
         // 커서를 영역 중앙으로
