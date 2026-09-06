@@ -207,6 +207,23 @@ public class EditorWindowSizingPolicyTests
     }
 
     [Theory]
+    [InlineData(EditorWindowSizeMode.RememberLast, true, true)]
+    [InlineData(EditorWindowSizeMode.RememberLast, false, false)]
+    [InlineData(EditorWindowSizeMode.Maximized, true, false)]
+    [InlineData(EditorWindowSizeMode.FitToCapture, true, false)]
+    public void RestoresOnlyMinimizedRememberLastWindowForPresentation(
+        EditorWindowSizeMode mode,
+        bool isMinimized,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            EditorWindowSizingPolicy.ShouldRestoreMinimizedForPresentation(
+                mode,
+                isMinimized));
+    }
+
+    [Theory]
     [InlineData(false, false, true)]
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]

@@ -215,6 +215,15 @@ public partial class EditorWindow : Window
         _applyingWindowSizingPolicy = true;
         try
         {
+            if (EditorWindowSizingPolicy.ShouldRestoreMinimizedForPresentation(
+                    mode,
+                    WindowState == WindowState.Minimized))
+            {
+                WindowState = WindowState.Normal;
+                viewportOrStateChanged = true;
+                DiagnosticLog.Write("EditorWindow", "최소화된 편집기 창을 복원함");
+            }
+
             if (EditorWindowSizingPolicy.ShouldMaximize(mode))
             {
                 if (WindowState != WindowState.Maximized)

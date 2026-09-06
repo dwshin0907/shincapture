@@ -63,6 +63,11 @@ public static class EditorWindowSizingPolicy
         current == EditorWindowSizeMode.RememberLast &&
         previous != EditorWindowSizeMode.RememberLast;
 
+    public static bool ShouldRestoreMinimizedForPresentation(
+        EditorWindowSizeMode mode,
+        bool isMinimized) =>
+        mode == EditorWindowSizeMode.RememberLast && isMinimized;
+
     public static bool ShouldDeferRefresh(bool isLoaded, bool isVisible) =>
         !isLoaded || !isVisible;
 
