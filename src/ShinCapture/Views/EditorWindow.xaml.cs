@@ -38,7 +38,9 @@ public partial class EditorWindow : Window
     private BitmapSource _sourceImage;
     private ITool? _activeTool;
     private readonly Dictionary<string, Button> _toolButtons = new();
-    private readonly Dictionary<string, TextBlock> _toolLabels = new();
+    private readonly Dictionary<string, MenuItem> _overflowToolItems = new();
+    private string? _selectedToolName;
+    private EditorToolVisibility? _lastDirectToolVisibility;
     private EditorChromeMode? _lastChromeMode;
     private bool? _historyPanelVisibilityOverride;
     private static readonly TrayIconGeometryConverter IconConverter = new();
@@ -71,6 +73,7 @@ public partial class EditorWindow : Window
         _saveManager = saveManager;
         _settings = settings;
         _settingsManager = settingsManager;
+        _toolStyleSaveTimer.Tick += (_, _) => FlushToolStyles();
         _dragExportService.Cleanup();
         _sourceImage = EnsureFrozen(capturedImage);
 
@@ -116,14 +119,13 @@ public partial class EditorWindow : Window
             _lastChromeMode = layout.Mode;
         }
 
-        foreach (TextBlock label in _toolLabels.Values)
-            label.Visibility = layout.ShowToolLabels ? Visibility.Visible : Visibility.Collapsed;
+        UpdateToolLayout(layout.DirectToolVisibility);
 
         bool showHistory = _historyPanelVisibilityOverride ?? layout.ShowHistoryByDefault;
         HistoryBorder.Width = showHistory ? 180 : 0;
         HistoryBorder.Visibility = showHistory ? Visibility.Visible : Visibility.Collapsed;
         if (HistoryToggleBtn != null)
-            HistoryToggleBtn.Style = (Style)FindResource(showHistory ? "ToolbarButtonActive" : "EditorIconButton");
+            HistoryToggleBtn.Style = (Style)FindResource(showHistory ? "ToolbarButtonActive" : "EditorCommandButton");
     }
 
     private void SizeWindowToImage()
@@ -457,6 +459,7 @@ public partial class EditorWindow : Window
     /// <summary>X 버튼 ▸ 숨기기 (편집 상태 유지). 앱 종료 시에만 ForceClose.</summary>
     private void OnEditorClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        FlushToolStyles();
         if (!_forceClose)
         {
             e.Cancel = true;
@@ -614,27 +617,34 @@ public partial class EditorWindow : Window
 
     private void BuildToolbar()
     {
-        string? lastGroup = null;
         foreach (EditorToolDescriptor tool in EditorToolbarCatalog.Tools)
         {
-            if (lastGroup != null && lastGroup != tool.Group)
-                ToolbarPanel.Children.Add(CreateSeparator());
-
             Button btn = CreateToolButton(tool);
             btn.Click += (_, _) => SelectTool(tool.Name);
-            ToolbarPanel.Children.Add(btn);
             _toolButtons[tool.Name] = btn;
-            lastGroup = tool.Group;
+
+            MenuItem menuItem = CreateActionMenuItem(
+                tool.DisplayName,
+                tool.IconKey,
+                (_, _) => SelectTool(tool.Name));
+            menuItem.IsCheckable = true;
+            menuItem.StaysOpenOnClick = false;
+            menuItem.ToolTip = tool.ToolTip;
+            menuItem.InputGestureText = tool.Shortcut;
+            _overflowToolItems[tool.Name] = menuItem;
         }
 
+        UpdateToolLayout(EditorChromeLayoutPolicy.Resolve(Width).DirectToolVisibility);
+
+        UtilityCommandPanel.Children.Add(CreateImageTransformMenuButton());
         UtilityCommandPanel.Children.Add(CreateAiMenuButton());
         UtilityCommandPanel.Children.Add(CreateSeparator());
 
-        Button undoBtn = CreateIconCommandButton("undo", "실행취소 (Ctrl+Z)");
+        Button undoBtn = CreateCommandButton("undo", "실행취소", "실행취소 (Ctrl+Z)");
         undoBtn.Click += (_, _) => _commandStack.Undo();
         UtilityCommandPanel.Children.Add(undoBtn);
 
-        Button redoBtn = CreateIconCommandButton("redo", "다시실행 (Ctrl+Y)");
+        Button redoBtn = CreateCommandButton("redo", "다시실행", "다시실행 (Ctrl+Y)");
         redoBtn.Click += (_, _) => _commandStack.Redo();
         UtilityCommandPanel.Children.Add(redoBtn);
 
@@ -645,8 +655,7 @@ public partial class EditorWindow : Window
         // 이전 도구 기록 (스포이드 복귀용)
         if (_activeTool != null && name == "색상추출")
         {
-            var prevName = _toolButtons.FirstOrDefault(kv => kv.Value.Style == (Style)FindResource("ToolbarButtonActive")).Key;
-            if (prevName != null) _lastToolName = prevName;
+            if (_selectedToolName != null) _lastToolName = _selectedToolName;
         }
 
         if (name == "크롭" && _objects.Count > 0)
@@ -655,6 +664,7 @@ public partial class EditorWindow : Window
             return;
         }
 
+        RememberToolStyle();
         _activeTool?.Reset();
         _activeTool = name switch
         {
@@ -683,6 +693,8 @@ public partial class EditorWindow : Window
         if (_activeTool != null)
         {
             _activeTool.CurrentColor = _currentColor;
+            EditorToolStyleMemory.Restore(_settings.Editor, _activeTool);
+            _currentColor = _activeTool.CurrentColor;
             _currentWidth = _activeTool.CurrentWidth;
             _activeTool.CurrentFontName = _currentFontName;
             _activeTool.CurrentFontSize = _currentFontSize;
@@ -692,6 +704,7 @@ public partial class EditorWindow : Window
             _activeTool.TextBorderColor = _textBorderColor;
         }
         Canvas.SetTool(_activeTool);
+        _selectedToolName = name;
         BuildContextProperties(name);
         BuildSubOptions(name);
 
@@ -699,6 +712,7 @@ public partial class EditorWindow : Window
         {
             btn.Style = (Style)FindResource(n == name ? "ToolbarButtonActive" : "ToolbarButton");
         }
+        UpdateOverflowSelection();
     }
 
     private void OnCommandRequested(object? sender, IEditorCommand cmd)
@@ -729,15 +743,13 @@ public partial class EditorWindow : Window
 
         var label = new TextBlock
         {
-            Text = tool.Name,
+            Text = tool.DisplayName,
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
         panel.Children.Add(label);
-        _toolLabels[tool.Name] = label;
-
         var button = new Button
         {
             Content = panel,
@@ -749,17 +761,97 @@ public partial class EditorWindow : Window
         return button;
     }
 
-    private Button CreateIconCommandButton(string iconKey, string accessibleName)
+    private Button CreateCommandButton(string iconKey, string label, string accessibleName)
     {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(CreateIconPath(iconKey, 18));
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(6, 0, 0, 0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
         var button = new Button
         {
-            Content = CreateIconPath(iconKey, 18),
-            Style = (Style)FindResource("EditorIconButton"),
+            Content = panel,
+            Style = (Style)FindResource("EditorCommandButton"),
             Margin = new Thickness(1, 0, 1, 0),
             ToolTip = accessibleName
         };
         AutomationProperties.SetName(button, accessibleName);
         return button;
+    }
+
+    private void UpdateToolLayout(EditorToolVisibility directVisibility)
+    {
+        if (ToolbarPanel == null || ToolOverflowMenu == null || ToolOverflowBtn == null)
+            return;
+        if (_lastDirectToolVisibility == directVisibility && ToolbarPanel.Children.Count > 0)
+        {
+            UpdateOverflowSelection();
+            return;
+        }
+
+        _lastDirectToolVisibility = directVisibility;
+
+        ToolbarPanel.Children.Clear();
+        ToolOverflowMenu.Items.Clear();
+        string? lastDirectGroup = null;
+        string? lastOverflowGroup = null;
+
+        foreach (EditorToolDescriptor tool in EditorToolbarCatalog.Tools)
+        {
+            bool isDirect = tool.Visibility <= directVisibility;
+            if (isDirect)
+            {
+                if (lastDirectGroup != null && lastDirectGroup != tool.Group)
+                    ToolbarPanel.Children.Add(CreateSeparator());
+                ToolbarPanel.Children.Add(_toolButtons[tool.Name]);
+                lastDirectGroup = tool.Group;
+                continue;
+            }
+
+            if (lastOverflowGroup != null && lastOverflowGroup != tool.Group)
+                ToolOverflowMenu.Items.Add(new Separator());
+            ToolOverflowMenu.Items.Add(_overflowToolItems[tool.Name]);
+            lastOverflowGroup = tool.Group;
+        }
+
+        ToolOverflowBtn.Visibility = ToolOverflowMenu.Items.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        UpdateOverflowSelection();
+    }
+
+    private void UpdateOverflowSelection()
+    {
+        if (ToolOverflowBtn == null || ToolOverflowLabel == null)
+            return;
+
+        foreach (var (name, item) in _overflowToolItems)
+            item.IsChecked = name == _selectedToolName;
+
+        EditorToolDescriptor? selected = EditorToolbarCatalog.Tools
+            .FirstOrDefault(tool => tool.Name == _selectedToolName);
+        bool selectedIsOverflow = selected != null
+            && ToolOverflowMenu.Items.Contains(_overflowToolItems[selected.Name]);
+
+        ToolOverflowLabel.Text = selectedIsOverflow
+            ? $"더보기 · {selected!.DisplayName}"
+            : "더보기";
+        ToolOverflowBtn.Style = (Style)FindResource(
+            selectedIsOverflow ? "ToolbarButtonActive" : "ToolbarButton");
+        AutomationProperties.SetName(
+            ToolOverflowBtn,
+            selectedIsOverflow ? $"더보기 편집 도구, 현재 {selected!.DisplayName}" : "더보기 편집 도구");
+    }
+
+    private void OnToolOverflowClick(object sender, RoutedEventArgs e)
+    {
+        ToolOverflowMenu.PlacementTarget = ToolOverflowBtn;
+        ToolOverflowMenu.IsOpen = true;
     }
 
     private Button CreateAiMenuButton()
@@ -964,6 +1056,7 @@ public partial class EditorWindow : Window
                 {
                     _currentColor = color;
                     if (_activeTool != null) _activeTool.CurrentColor = color;
+                    RememberToolStyle();
                     BuildContextProperties(toolName);
                 };
                 PropertyPanel.Children.Add(swatch);
@@ -1020,7 +1113,7 @@ public partial class EditorWindow : Window
             bool isHighlighter = toolName == "형광펜";
             bool isNumber = toolName == "번호";
             double maxWidth = isHighlighter ? 40 : isNumber ? 40 : 20;
-            double widthVal = isHighlighter ? Math.Max(_currentWidth, 20) : _currentWidth;
+            double widthVal = _currentWidth;
             var widthLabel = toolName == "번호" ? "크기" : "굵기";
             PropertyPanel.Children.Add(MakeSectionLabel(widthLabel));
             var slider = new Slider
@@ -1035,6 +1128,7 @@ public partial class EditorWindow : Window
                 _currentWidth = Math.Round(e.NewValue, 1);
                 label.Text = $"{_currentWidth:0.#}px";
                 if (_activeTool != null) _activeTool.CurrentWidth = _currentWidth;
+                RememberToolStyle();
             };
             PropertyPanel.Children.Add(slider);
             PropertyPanel.Children.Add(label);
@@ -2227,12 +2321,14 @@ public partial class EditorWindow : Window
         var tool = new EyedropperTool(_sourceImage);
         tool.ColorPicked += color =>
         {
-            _currentColor = color;
-            if (_activeTool != null) _activeTool.CurrentColor = color;
-            StatusText.Text = $"색상 선택: #{color.R:X2}{color.G:X2}{color.B:X2}";
             // 이전 도구로 자동 복귀
             if (_lastToolName != null && _lastToolName != "색상추출")
                 SelectTool(_lastToolName);
+            _currentColor = color;
+            if (_activeTool != null) _activeTool.CurrentColor = color;
+            RememberToolStyle();
+            BuildContextProperties(GetCurrentToolDisplayName());
+            StatusText.Text = $"색상 선택: #{color.R:X2}{color.G:X2}{color.B:X2}";
         };
         return tool;
     }
@@ -2253,10 +2349,11 @@ public partial class EditorWindow : Window
             var c = dlg.Color;
             _currentColor = System.Windows.Media.Color.FromRgb(c.R, c.G, c.B);
             if (_activeTool != null) _activeTool.CurrentColor = _currentColor;
+            RememberToolStyle();
 
             // 사용자 지정색 저장 (영구 보존)
             _settings.CustomColors = dlg.CustomColors ?? Array.Empty<int>();
-            _settingsManager?.Save(_settings);
+            _settingsManager?.Update(settings => settings.CustomColors = _settings.CustomColors, raiseChanged: false);
 
             BuildContextProperties(GetCurrentToolDisplayName());
         }
@@ -2341,15 +2438,17 @@ public partial class EditorWindow : Window
     {
         BitmapSource renderedSource = RenderFinalImageSource();
         StatusText.Text = "클립보드에 복사 중...";
-        bool copied = await CopyImageToClipboardAsync(renderedSource);
-        StatusText.Text = copied
-            ? "클립보드에 복사됨"
+        ClipboardImageService.ClipboardImageResult result =
+            await CopyImageAndPathToClipboardAsync(renderedSource);
+        StatusText.Text = result.Success
+            ? "이미지와 파일 경로 복사됨 — 터미널에 붙여넣을 수 있습니다"
             : "클립보드에 복사하지 못했습니다";
     }
 
     private void OnEditorSettingsClick(object sender, RoutedEventArgs e)
     {
         if (_settingsManager == null) return;
+        FlushToolStyles();
         // 단축키 탭(4번째, 인덱스 3 — 일반/캡쳐/저장/단축키/지정사이즈/AI)을 기본 선택
         var win = new SettingsWindow(_settingsManager, initialTabIndex: 3);
         win.Owner = this;
@@ -2393,6 +2492,20 @@ public partial class EditorWindow : Window
         {
             DiagnosticLog.Write("Clipboard", "편집기 이미지 복사 실패", ex);
             return false;
+        }
+    }
+
+    private static async Task<ClipboardImageService.ClipboardImageResult>
+        CopyImageAndPathToClipboardAsync(BitmapSource image)
+    {
+        try
+        {
+            return await ClipboardImageService.SetImageWithFileAsync(image);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Clipboard", "편집기 이미지 및 경로 복사 실패", ex);
+            return new ClipboardImageService.ClipboardImageResult(false, null, ex);
         }
     }
 

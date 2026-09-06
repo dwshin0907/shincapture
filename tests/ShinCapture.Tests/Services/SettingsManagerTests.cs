@@ -50,6 +50,35 @@ public class SettingsManagerTests : IDisposable
         Assert.Equal(75, loaded.Save.JpgQuality);
     }
 
+    [Theory]
+    [InlineData("Ctrl+Shift+L")]
+    [InlineData("Ctrl+Alt+2")]
+    [InlineData("")]
+    public void Load_LegacyTranslationHotkey_IsIgnoredAndRemovedOnSave(string shortcut)
+    {
+        var filePath = Path.Combine(_tempDir, "settings.json");
+        File.WriteAllText(filePath, JsonSerializer.Serialize(new
+        {
+            hotkeys = new { translateCapture = shortcut, textCapture = "Ctrl+Alt+T" },
+            ai = new { enabled = true, targetLanguage = "ja" }
+        }));
+
+        var loaded = _manager.Load();
+
+        Assert.Equal("Ctrl+Alt+T", loaded.Hotkeys.TextCapture);
+        Assert.True(loaded.Ai.Enabled);
+        Assert.Equal("ja", loaded.Ai.TargetLanguage);
+        Assert.Empty(TrayMenuCatalog.CreateCaptureActions(loaded.Hotkeys)
+            .Single(action => action.Mode == CaptureMode.Translate).Shortcut);
+
+        _manager.Save(loaded);
+
+        using var saved = JsonDocument.Parse(File.ReadAllText(filePath));
+        Assert.False(saved.RootElement.GetProperty("hotkeys")
+            .TryGetProperty("translateCapture", out _));
+        Assert.Equal("Ctrl+Alt+T", _manager.Load().Hotkeys.TextCapture);
+    }
+
     [Fact]
     public void Load_LegacySettingsWithoutEditor_UsesEditorDefaultsAndPreservesGeneralSettings()
     {

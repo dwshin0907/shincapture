@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -124,16 +125,38 @@ public static class BitmapHelper
     }
 
     public static bool TrySetClipboardPng(BitmapSource source, out Exception? error)
+        => TrySetClipboardPngCore(source, filePath: null, allowImageOnlyFallback: true, out error);
+
+    public static bool TrySetClipboardPngWithFile(
+        BitmapSource source,
+        string filePath,
+        out Exception? error)
+        => TrySetClipboardPngCore(source, filePath, allowImageOnlyFallback: false, out error);
+
+    public static ClipboardDataPackage BuildClipboardDataPackage(
+        BitmapSource source,
+        string? filePath = null)
     {
         ArgumentNullException.ThrowIfNull(source);
-        error = null;
+
+        string? fullPath = null;
+        if (filePath != null)
+        {
+            fullPath = Path.GetFullPath(filePath);
+            if (!File.Exists(fullPath))
+                throw new FileNotFoundException("클립보드에 등록할 PNG 파일을 찾을 수 없습니다.", fullPath);
+        }
+
+        MemoryStream? pngStream = null;
+        Bitmap? rawBitmap = null;
+        Bitmap? flatBitmap = null;
 
         try
         {
             byte[] pngBytes = EncodePng(source);
-            using var pngStream = new MemoryStream(pngBytes, writable: false);
-            using var rawBitmap = ToBitmap(source);
-            using var flatBitmap = FlattenAlphaToWhite(rawBitmap);
+            pngStream = new MemoryStream(pngBytes, writable: false);
+            rawBitmap = ToBitmap(source);
+            flatBitmap = FlattenAlphaToWhite(rawBitmap);
 
             var dataObject = new System.Windows.Forms.DataObject();
             dataObject.SetData("PNG", autoConvert: false, pngStream);
@@ -142,14 +165,62 @@ public static class BitmapHelper
                 autoConvert: true,
                 flatBitmap);
 
+            if (fullPath != null)
+            {
+                var files = new StringCollection { fullPath };
+                dataObject.SetFileDropList(files);
+                dataObject.SetData(
+                    System.Windows.Forms.DataFormats.UnicodeText,
+                    autoConvert: false,
+                    QuotePathForTerminal(fullPath));
+            }
+
+            return new ClipboardDataPackage(dataObject, pngStream, rawBitmap, flatBitmap);
+        }
+        catch
+        {
+            pngStream?.Dispose();
+            rawBitmap?.Dispose();
+            flatBitmap?.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Windows 터미널에 그대로 붙여넣을 수 있도록 줄바꿈 없는 절대 경로를 큰따옴표로 감싼다.
+    /// FileDrop 형식에는 이 문자열이 아니라 따옴표 없는 절대 경로를 별도로 등록한다.
+    /// </summary>
+    public static string QuotePathForTerminal(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string fullPath = Path.GetFullPath(path);
+        if (fullPath.IndexOfAny(['\r', '\n']) >= 0)
+            throw new ArgumentException("클립보드 경로에는 줄바꿈을 포함할 수 없습니다.", nameof(path));
+        return $"\"{fullPath.Replace("\"", "\"\"")}\"";
+    }
+
+    private static bool TrySetClipboardPngCore(
+        BitmapSource source,
+        string? filePath,
+        bool allowImageOnlyFallback,
+        out Exception? error)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        error = null;
+
+        try
+        {
+            using ClipboardDataPackage package = BuildClipboardDataPackage(source, filePath);
+
             int[] retryDelaysMs = [0, 15, 40, 80];
             foreach (int delayMs in retryDelaysMs)
             {
                 if (delayMs > 0) Thread.Sleep(delayMs);
                 try
                 {
-                    pngStream.Position = 0;
-                    System.Windows.Forms.Clipboard.SetDataObject(dataObject, copy: true);
+                    package.RewindPng();
+                    System.Windows.Forms.Clipboard.SetDataObject(package.DataObject, copy: true);
+                    error = null;
                     return true;
                 }
                 catch (ExternalException ex)
@@ -163,6 +234,9 @@ public static class BitmapHelper
             error = ex;
         }
 
+        if (!allowImageOnlyFallback)
+            return false;
+
         try
         {
             System.Windows.Clipboard.SetImage(source);
@@ -174,6 +248,36 @@ public static class BitmapHelper
                 ? fallbackError
                 : new AggregateException(error, fallbackError);
             return false;
+        }
+    }
+
+    public sealed class ClipboardDataPackage : IDisposable
+    {
+        private readonly Stream _pngStream;
+        private readonly Bitmap _rawBitmap;
+        private readonly Bitmap _flatBitmap;
+
+        internal ClipboardDataPackage(
+            System.Windows.Forms.DataObject dataObject,
+            Stream pngStream,
+            Bitmap rawBitmap,
+            Bitmap flatBitmap)
+        {
+            DataObject = dataObject;
+            _pngStream = pngStream;
+            _rawBitmap = rawBitmap;
+            _flatBitmap = flatBitmap;
+        }
+
+        public System.Windows.Forms.DataObject DataObject { get; }
+
+        internal void RewindPng() => _pngStream.Position = 0;
+
+        public void Dispose()
+        {
+            _pngStream.Dispose();
+            _rawBitmap.Dispose();
+            _flatBitmap.Dispose();
         }
     }
 

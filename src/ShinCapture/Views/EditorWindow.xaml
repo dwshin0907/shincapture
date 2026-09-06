@@ -29,12 +29,13 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Main command bar -->
+        <!-- Operation commands -->
         <Border Grid.Row="0" Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
                 Padding="8,6">
@@ -43,44 +44,70 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-
                 <ScrollViewer Grid.Column="0"
                               HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Disabled"
                               PanningMode="HorizontalOnly"
                               Focusable="False">
-                    <StackPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
-                </ScrollViewer>
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
-                    <StackPanel x:Name="UtilityCommandPanel" Orientation="Horizontal" Margin="0,0,4,0"/>
-                    <Button x:Name="HistoryToggleBtn"
-                            Style="{DynamicResource EditorIconButton}"
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel x:Name="UtilityCommandPanel" Orientation="Horizontal" Margin="0,0,4,0"/>
+                        <Button x:Name="HistoryToggleBtn"
+                            Style="{DynamicResource EditorCommandButton}"
                             Margin="0,0,4,0"
                             Click="OnHistoryToggleClick"
                             ToolTip="캡처 기록 표시/숨기기"
                             AutomationProperties.Name="캡처 기록 표시 또는 숨기기">
-                        <Path Data="{Binding Source=history, Converter={StaticResource EditorIcon}}"
-                              Stroke="{DynamicResource TextSecondaryBrush}"
-                              StrokeThickness="1.8" StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                              Width="19" Height="19" Stretch="Uniform"/>
-                    </Button>
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{Binding Source=history, Converter={StaticResource EditorIcon}}"
+                                  Stroke="{DynamicResource TextSecondaryBrush}"
+                                  StrokeThickness="1.8" StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Width="18" Height="18" Stretch="Uniform"/>
+                            <TextBlock Text="기록" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
                     <Button x:Name="CopyBtn" Style="{DynamicResource EditorCommandButton}"
-                            Content="복사" Margin="0,0,4,0" Click="OnCopyClick"
-                            ToolTip="이미지를 클립보드에 복사 (Ctrl+C)"
-                            AutomationProperties.Name="이미지 복사"/>
+                            Margin="0,0,4,0" Click="OnCopyClick"
+                            ToolTip="편집된 이미지와 파일 경로 복사 (Ctrl+C)"
+                            AutomationProperties.Name="편집된 이미지와 파일 경로 복사">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{Binding Source=copy, Converter={StaticResource EditorIcon}}"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Width="18" Height="18" Stretch="Uniform"/>
+                            <TextBlock Text="복사" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="SaveAsBtn" Style="{DynamicResource EditorCommandButton}"
-                            Content="다른 이름" Margin="0,0,4,0" Click="OnSaveAsClick"
+                            Margin="0,0,4,0" Click="OnSaveAsClick"
                             ToolTip="다른 이름으로 저장 (Ctrl+Shift+S)"
-                            AutomationProperties.Name="다른 이름으로 저장"/>
+                            AutomationProperties.Name="다른 이름으로 저장">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{Binding Source=save-as, Converter={StaticResource EditorIcon}}"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Width="18" Height="18" Stretch="Uniform"/>
+                            <TextBlock Text="다른 이름" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="SaveBtn" Style="{DynamicResource AccentButton}"
-                            Content="저장" MinHeight="36" Padding="16,6" Click="OnSaveClick"
+                            MinHeight="36" Padding="14,6" Click="OnSaveClick"
                             ToolTip="빠른 저장 (Ctrl+S)"
-                            AutomationProperties.Name="빠른 저장"/>
-                    <Button x:Name="MoreBtn" Style="{DynamicResource EditorIconButton}"
+                            AutomationProperties.Name="빠른 저장">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{Binding Source=save, Converter={StaticResource EditorIcon}}"
+                                  Stroke="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
+                                  StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" Width="18" Height="18" Stretch="Uniform"/>
+                            <TextBlock Text="저장" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="MoreBtn" Style="{DynamicResource EditorCommandButton}"
                             Margin="4,0,0,0" Click="OnMoreClick"
-                            ToolTip="더보기"
+                            ToolTip="설정 및 도움말"
                             AutomationProperties.Name="편집기 더보기 메뉴">
                         <Button.ContextMenu>
                             <ContextMenu x:Name="MoreMenu" Placement="Bottom">
@@ -93,17 +120,45 @@
                                           AutomationProperties.Name="네이버 프리미엄콘텐츠 AI 실전 활용법 열기"/>
                             </ContextMenu>
                         </Button.ContextMenu>
-                        <Path Data="{Binding Source=more, Converter={StaticResource EditorIcon}}"
-                              Stroke="{DynamicResource TextSecondaryBrush}"
-                              StrokeThickness="2" StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" Width="18" Height="18" Stretch="Uniform"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{Binding Source=more, Converter={StaticResource EditorIcon}}"
+                                  Stroke="{DynamicResource TextSecondaryBrush}"
+                                  StrokeThickness="2" StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" Width="18" Height="18" Stretch="Uniform"/>
+                            <TextBlock Text="메뉴" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
+        <!-- Drawing tools: names stay visible; less-used tools move into overflow. -->
+        <Border Grid.Row="1" Background="{DynamicResource BackgroundPrimaryBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                Padding="8,5">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="ToolOverflowBtn" DockPanel.Dock="Right"
+                        Style="{DynamicResource ToolbarButton}" Margin="6,0,0,0"
+                        Click="OnToolOverflowClick" ToolTip="숨겨진 편집 도구 열기"
+                        AutomationProperties.Name="더보기 편집 도구">
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="ToolOverflowMenu" Placement="Bottom"/>
+                    </Button.ContextMenu>
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{Binding Source=more, Converter={StaticResource EditorIcon}}"
+                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Width="18" Height="18" Stretch="Uniform"/>
+                        <TextBlock x:Name="ToolOverflowLabel" Text="더보기" Margin="6,0,0,0"
+                                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel x:Name="ToolbarPanel" Orientation="Horizontal"/>
+            </DockPanel>
+        </Border>
+
         <!-- Context Property Bar -->
-        <Border Grid.Row="1" x:Name="PropertyBorder"
+        <Border Grid.Row="2" x:Name="PropertyBorder"
                 Background="{DynamicResource BackgroundTertiaryBrush}"
                 BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1"
                 Padding="8,6" MinHeight="42">
@@ -114,7 +169,7 @@
         </Border>
 
         <!-- Canvas + History Panel -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -157,22 +212,38 @@
                                 ToolTip="네이버 프리미엄콘텐츠 AI 실전 활용법 채널"
                                 AutomationProperties.Name="네이버 프리미엄콘텐츠 AI 실전 활용법 열기">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="30"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Border Width="26" Height="26" CornerRadius="7" Background="#03C75A">
-                                    <TextBlock Text="N" Foreground="White" FontWeight="Bold"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="42"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="38" Height="38" CornerRadius="10" Background="White">
+                                        <TextBlock Text="N" FontSize="23" FontWeight="Bold" Foreground="#03C75A"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="네이버&#x0a;프리미엄콘텐츠"
+                                               FontSize="10" FontWeight="SemiBold" LineHeight="13"
+                                               Foreground="#073D24" VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock Grid.Row="1" Text="AI 실전 활용법" Margin="0,11,0,3"
+                                           FontSize="16" FontWeight="Bold" Foreground="#073D24"/>
+                                <TextBlock Grid.Row="2" Text="네이버에서 콘텐츠 보기" FontSize="10.5"
+                                           Foreground="#073D24" TextWrapping="Wrap"/>
+                                <Border Grid.Row="3" Margin="0,11,0,0" Padding="9,6" CornerRadius="6"
+                                        Background="#073D24" BorderBrush="#073D24" BorderThickness="1">
+                                    <DockPanel LastChildFill="False">
+                                        <TextBlock Text="채널 보러가기" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="White"/>
+                                        <TextBlock Text="↗" Margin="0,0,1,0" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" DockPanel.Dock="Right"/>
+                                    </DockPanel>
                                 </Border>
-                                <StackPanel Grid.Column="1" Margin="7,0,4,0">
-                                    <TextBlock Text="AI 실전 활용법" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock Text="프리미엄콘텐츠에서 보기" FontSize="9.5"
-                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                </StackPanel>
-                                <TextBlock Grid.Column="2" Text="→" Foreground="#03A94F"
-                                           VerticalAlignment="Center"/>
                             </Grid>
                         </Button>
                     </Border>
@@ -185,7 +256,7 @@
         </Grid>
 
         <!-- OCR 결과 패널 (기본 숨김) — 좌우 분할 디자인 -->
-        <Border Grid.Row="3" x:Name="OcrPanel" Visibility="Collapsed"
+        <Border Grid.Row="4" x:Name="OcrPanel" Visibility="Collapsed"
                 IsVisibleChanged="OnOcrPanelVisibilityChanged"
                 Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
@@ -333,7 +404,7 @@
         </Border>
 
         <!-- Passive status bar + zoom controls -->
-        <Border Grid.Row="4" Background="{DynamicResource BackgroundSecondaryBrush}"
+        <Border Grid.Row="5" Background="{DynamicResource BackgroundSecondaryBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                 Padding="10,6">
             <Grid>

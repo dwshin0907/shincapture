@@ -168,7 +168,6 @@ public partial class MainWindow : Window
         Reg("스크롤", _settings.Hotkeys.ScrollCapture, CaptureMode.Scroll);
         Reg("지정사이즈", _settings.Hotkeys.FixedSizeCapture, CaptureMode.FixedSize);
         Reg("텍스트 캡쳐", _settings.Hotkeys.TextCapture, CaptureMode.Text);
-        Reg("텍스트+번역", _settings.Hotkeys.TranslateCapture, CaptureMode.Translate);
         Reg("스마트 컷", _settings.Hotkeys.SmartCutCapture, CaptureMode.SmartCut);
 
         if (failures.Count > 0)

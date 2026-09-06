@@ -7,21 +7,28 @@ public enum EditorChromeMode
     Comfortable
 }
 
+public enum EditorToolVisibility
+{
+    Essential,
+    Common,
+    All
+}
+
 public readonly record struct EditorChromeLayout(
     EditorChromeMode Mode,
-    bool ShowToolLabels,
+    EditorToolVisibility DirectToolVisibility,
     bool ShowHistoryByDefault,
     double HistoryWidth);
 
 public static class EditorChromeLayoutPolicy
 {
-    public const double ComfortableWidth = 1500;
+    public const double ComfortableWidth = 1400;
     public const double CompactWidth = 850;
 
     public static EditorChromeLayout Resolve(double width) => width switch
     {
-        >= ComfortableWidth => new(EditorChromeMode.Comfortable, true, true, 180),
-        >= CompactWidth => new(EditorChromeMode.Compact, false, true, 180),
-        _ => new(EditorChromeMode.Narrow, false, false, 0)
+        >= ComfortableWidth => new(EditorChromeMode.Comfortable, EditorToolVisibility.All, true, 180),
+        >= CompactWidth => new(EditorChromeMode.Compact, EditorToolVisibility.Common, true, 180),
+        _ => new(EditorChromeMode.Narrow, EditorToolVisibility.Essential, false, 0)
     };
 }

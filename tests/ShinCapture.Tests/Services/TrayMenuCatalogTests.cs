@@ -38,13 +38,12 @@ public class TrayMenuCatalogTests
     }
 
     [Fact]
-    public void ReflectsCustomPrimaryAlternateAndTranslateShortcuts()
+    public void ReflectsCustomRegionShortcutsAndKeepsTranslationWithoutShortcut()
     {
         HotkeySettings settings = new()
         {
             RegionCapture = "Ctrl+Alt+1",
-            RegionCaptureAlt = "Ctrl+Alt+R",
-            TranslateCapture = "Ctrl+Alt+2"
+            RegionCaptureAlt = "Ctrl+Alt+R"
         };
 
         IReadOnlyList<TrayCaptureAction> actions = TrayMenuCatalog.CreateCaptureActions(settings);
@@ -53,7 +52,7 @@ public class TrayMenuCatalogTests
             "Ctrl+Alt+1  ·  Ctrl+Alt+R",
             actions.Single(action => action.Mode == CaptureMode.Region).Shortcut);
         Assert.Equal(
-            "Ctrl+Alt+2",
+            string.Empty,
             actions.Single(action => action.Mode == CaptureMode.Translate).Shortcut);
     }
 
@@ -87,7 +86,7 @@ public class TrayMenuCatalogTests
             (CaptureMode.Freeform, "자유형", "Ctrl+Shift+F", "freeform", false),
             (CaptureMode.Element, "단위 영역", "Ctrl+Shift+D", "element", false),
             (CaptureMode.Text, "텍스트", "Ctrl+Shift+T", "text", false),
-            (CaptureMode.Translate, "텍스트 + 번역", "Ctrl+Shift+L", "translate", true)
+            (CaptureMode.Translate, "텍스트 + 번역", "", "translate", true)
         ];
 
         IReadOnlyList<TrayCaptureAction> actions =
@@ -113,8 +112,7 @@ public class TrayMenuCatalogTests
             FixedSizeCapture = "  Ctrl+Z  ",
             FreeformCapture = "  Ctrl+F  ",
             ElementCapture = "  Ctrl+D  ",
-            TextCapture = "  Ctrl+T  ",
-            TranslateCapture = "  Ctrl+L  "
+            TextCapture = "  Ctrl+T  "
         };
         string[] expected =
         [
@@ -127,7 +125,7 @@ public class TrayMenuCatalogTests
             "Ctrl+F",
             "Ctrl+D",
             "Ctrl+T",
-            "Ctrl+L"
+            ""
         ];
 
         Assert.Equal(
@@ -145,8 +143,7 @@ public class TrayMenuCatalogTests
             FixedSizeCapture = " \t ",
             FreeformCapture = " \t ",
             ElementCapture = " \t ",
-            TextCapture = " \t ",
-            TranslateCapture = " \t "
+            TextCapture = " \t "
         };
 
         Assert.All(

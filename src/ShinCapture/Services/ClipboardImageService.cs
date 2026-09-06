@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
@@ -13,6 +14,13 @@ public static class ClipboardImageService
     private static readonly object Sync = new();
     private static readonly Queue<WorkItem> Queue = new();
     private static readonly Thread Worker;
+    private static readonly DragExportService ClipboardExporter = new(
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ShinCapture",
+            "Temp",
+            "Clipboard"));
+    private static IDisposable? _latestExportLease;
 
     static ClipboardImageService()
     {
@@ -25,11 +33,22 @@ public static class ClipboardImageService
         Worker.Start();
     }
 
-    public static Task<bool> SetImageAsync(BitmapSource source)
+    public static async Task<bool> SetImageAsync(BitmapSource source)
+    {
+        ClipboardImageResult result = await EnqueueAsync(source, includeFile: false);
+        return result.Success;
+    }
+
+    public static Task<ClipboardImageResult> SetImageWithFileAsync(BitmapSource source)
+        => EnqueueAsync(source, includeFile: true);
+
+    private static Task<ClipboardImageResult> EnqueueAsync(
+        BitmapSource source,
+        bool includeFile)
     {
         ArgumentNullException.ThrowIfNull(source);
         BitmapSource frozenSource = EnsureFrozen(source);
-        var completion = new TaskCompletionSource<bool>(
+        var completion = new TaskCompletionSource<ClipboardImageResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         lock (Sync)
@@ -37,10 +56,11 @@ public static class ClipboardImageService
             while (Queue.Count >= MaxQueuedItems)
             {
                 WorkItem superseded = Queue.Dequeue();
-                superseded.Completion.TrySetResult(false);
+                superseded.Completion.TrySetResult(
+                    new ClipboardImageResult(false, null, null));
             }
 
-            Queue.Enqueue(new WorkItem(frozenSource, completion));
+            Queue.Enqueue(new WorkItem(frozenSource, includeFile, completion));
             Monitor.Pulse(Sync);
         }
 
@@ -68,22 +88,62 @@ public static class ClipboardImageService
                 item = Queue.Dequeue();
             }
 
+            IDisposable? newLease = null;
             try
             {
-                bool copied = BitmapHelper.TrySetClipboardPng(item.Source, out Exception? error);
+                string? filePath = null;
+                bool copied;
+                Exception? error;
+
+                if (item.IncludeFile)
+                {
+                    filePath = ClipboardExporter.CreatePng(item.Source);
+                    newLease = ClipboardExporter.Protect(filePath);
+                    copied = BitmapHelper.TrySetClipboardPngWithFile(
+                        item.Source,
+                        filePath,
+                        out error);
+                }
+                else
+                {
+                    copied = BitmapHelper.TrySetClipboardPng(item.Source, out error);
+                }
+
                 if (!copied && error != null)
                     DiagnosticLog.Write("Clipboard", "이미지 복사 실패", error);
-                item.Completion.TrySetResult(copied);
+
+                if (copied && item.IncludeFile)
+                {
+                    IDisposable? oldLease = _latestExportLease;
+                    _latestExportLease = newLease;
+                    newLease = null;
+                    oldLease?.Dispose();
+                }
+                item.Completion.TrySetResult(new ClipboardImageResult(
+                    copied,
+                    copied ? filePath : null,
+                    error));
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write("Clipboard", "클립보드 작업 스레드 오류", ex);
-                item.Completion.TrySetException(ex);
+                item.Completion.TrySetResult(
+                    new ClipboardImageResult(false, null, ex));
+            }
+            finally
+            {
+                newLease?.Dispose();
             }
         }
     }
 
     private sealed record WorkItem(
         BitmapSource Source,
-        TaskCompletionSource<bool> Completion);
+        bool IncludeFile,
+        TaskCompletionSource<ClipboardImageResult> Completion);
+
+    public sealed record ClipboardImageResult(
+        bool Success,
+        string? FilePath,
+        Exception? Error);
 }

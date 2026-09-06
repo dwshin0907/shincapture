@@ -49,7 +49,7 @@ public static class TrayMenuCatalog
             new(
                 CaptureMode.Translate,
                 "텍스트 + 번역",
-                NormalizeShortcut(hotkeys.TranslateCapture),
+                string.Empty,
                 "translate",
                 IsWide: true)
         ];

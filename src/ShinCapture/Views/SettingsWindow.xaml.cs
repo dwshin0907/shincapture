@@ -52,7 +52,6 @@ public partial class SettingsWindow : Window
         new() { Advanced = true, Label = "단위영역",   Get = h => h.ElementCapture,   Set = (h, v) => h.ElementCapture = v },
         new() { Advanced = true, Label = "지정사이즈", Get = h => h.FixedSizeCapture, Set = (h, v) => h.FixedSizeCapture = v },
         new() { Advanced = true, Label = "텍스트 캡쳐", Get = h => h.TextCapture,      Set = (h, v) => h.TextCapture = v },
-        new() { Advanced = true, Label = "텍스트+번역", Get = h => h.TranslateCapture, Set = (h, v) => h.TranslateCapture = v },
     };
 
     public SettingsWindow(SettingsManager settingsManager, HotkeyManager? hotkeyManager = null, int initialTabIndex = 0)

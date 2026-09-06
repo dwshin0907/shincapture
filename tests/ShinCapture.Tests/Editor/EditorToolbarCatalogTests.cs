@@ -15,6 +15,7 @@ public class EditorToolbarCatalogTests
         Assert.All(tools, tool =>
         {
             Assert.False(string.IsNullOrWhiteSpace(tool.Name));
+            Assert.False(string.IsNullOrWhiteSpace(tool.DisplayName));
             Assert.False(string.IsNullOrWhiteSpace(tool.IconKey));
             Assert.False(string.IsNullOrWhiteSpace(tool.Group));
             Assert.False(string.IsNullOrWhiteSpace(tool.ToolTip));
@@ -32,5 +33,19 @@ public class EditorToolbarCatalogTests
         Assert.Equal("V", EditorToolbarCatalog.Tools.Single(tool => tool.Name == "선택").Shortcut);
         Assert.Equal("T", EditorToolbarCatalog.Tools.Single(tool => tool.Name == "텍스트").Shortcut);
         Assert.Equal("", EditorToolbarCatalog.Tools.Single(tool => tool.Name == "블러").Shortcut);
+    }
+
+    [Fact]
+    public void KeepsCommonToolsDirectlyDiscoverableAtCompactWidths()
+    {
+        string[] expected = ["선택", "펜", "형광펜", "도형", "화살표", "텍스트", "모자이크"];
+
+        Assert.Equal(
+            expected,
+            EditorToolbarCatalog.Tools
+                .Where(tool => tool.Visibility <= EditorToolVisibility.Common)
+                .Select(tool => tool.Name));
+        Assert.Equal("자르기", EditorToolbarCatalog.Tools.Single(tool => tool.Name == "크롭").DisplayName);
+        Assert.Equal("색상 추출", EditorToolbarCatalog.Tools.Single(tool => tool.Name == "색상추출").DisplayName);
     }
 }
