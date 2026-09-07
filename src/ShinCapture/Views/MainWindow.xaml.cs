@@ -26,8 +26,8 @@ public partial class MainWindow : Window
     private System.Windows.Forms.ContextMenuStrip _nativeTrayMenu;
     private TrayFlyoutWindow? _trayFlyout;
     private AppSettings _settings;
-    private CaptureMode _lastCaptureMode = CaptureMode.Region;
-    private bool _editorAutoTranslate;
+    private readonly CaptureSessionGate _captureSessionGate = new();
+    private CaptureOverlay? _activeCaptureOverlay;
     private bool _isExiting;
     private ReleaseUpdateInfo? _availableUpdate;
 
@@ -178,63 +178,205 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StartCapture(CaptureMode mode)
+    private void StartCapture(CaptureMode mode, bool editorAutoTranslate = false)
     {
         if (_isExiting) return;
 
-        _lastCaptureMode = mode;
-        if (mode == CaptureMode.Fullscreen)
+        if (!_captureSessionGate.TryBegin(mode, editorAutoTranslate, out CaptureSession? session) || session == null)
         {
-            var bitmap = ScreenHelper.CaptureFullScreen();
-            var result = new CaptureResult
-            {
-                Image = bitmap,
-                Region = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height)
-            };
-            HandleCaptureResult(result);
+            DiagnosticLog.Write("Capture", $"Ignored {mode} capture request because another capture is in progress.");
             return;
         }
 
-        ICaptureMode captureMode = mode switch
+        CaptureOverlay? overlay = null;
+        try
         {
-            CaptureMode.Region    => new RegionCaptureMode(),
-            CaptureMode.Freeform  => new FreeformCaptureMode(),
-            CaptureMode.Window    => new WindowCaptureMode(),
-            CaptureMode.Element   => new ElementCaptureMode(),
-            CaptureMode.Fullscreen => new FullscreenCaptureMode(),
-            CaptureMode.Scroll    => new ScrollCaptureMode(),
-            CaptureMode.FixedSize => new FixedSizeCaptureMode(
-                _settings.FixedSizes?.FirstOrDefault()?.Width  ?? 1280,
-                _settings.FixedSizes?.FirstOrDefault()?.Height ?? 720),
-            CaptureMode.Text => new RegionCaptureMode(),  // 영역 드래그 재사용, OCR 분기는 HandleCaptureResult
-            CaptureMode.SmartCut => new ShinCapture.Capture.SmartCutCaptureMode(),
-            _ => new RegionCaptureMode()
-        };
+            if (mode == CaptureMode.Fullscreen)
+            {
+                var bitmap = ScreenHelper.CaptureFullScreen();
+                var result = new CaptureResult
+                {
+                    Image = bitmap,
+                    Region = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height)
+                };
+                try
+                {
+                    HandleCaptureResult(result, session.Mode, session.EditorAutoTranslate);
+                }
+                finally
+                {
+                    CompleteCapture(session);
+                }
+                return;
+            }
 
-        var overlay = new CaptureOverlay(_settings.Capture);
-        overlay.Closed += (_, _) =>
+            ICaptureMode captureMode = mode switch
+            {
+                CaptureMode.Region    => new RegionCaptureMode(),
+                CaptureMode.Freeform  => new FreeformCaptureMode(),
+                CaptureMode.Window    => new WindowCaptureMode(),
+                CaptureMode.Element   => new ElementCaptureMode(),
+                CaptureMode.Fullscreen => new FullscreenCaptureMode(),
+                CaptureMode.Scroll    => new ScrollCaptureMode(),
+                CaptureMode.FixedSize => new FixedSizeCaptureMode(
+                    _settings.FixedSizes?.FirstOrDefault()?.Width  ?? 1280,
+                    _settings.FixedSizes?.FirstOrDefault()?.Height ?? 720),
+                CaptureMode.Text => new RegionCaptureMode(),  // 영역 드래그 재사용, OCR 분기는 HandleCaptureResult
+                CaptureMode.SmartCut => new ShinCapture.Capture.SmartCutCaptureMode(),
+                _ => new RegionCaptureMode()
+            };
+
+            overlay = new CaptureOverlay(_settings.Capture);
+            _activeCaptureOverlay = overlay;
+            overlay.Closed += (_, _) => OnCaptureOverlayClosed(overlay, captureMode, session);
+            overlay.Start(captureMode);
+        }
+        catch (Exception ex)
         {
+            try
+            {
+                if (ReferenceEquals(_activeCaptureOverlay, overlay))
+                    _activeCaptureOverlay = null;
+
+                try
+                {
+                    overlay?.Close();
+                }
+                catch (Exception closeException)
+                {
+                    DiagnosticLog.Write("Capture", "Failed to close an overlay after capture startup failed.", closeException);
+                }
+
+                ReportCaptureFailure("캡처 시작 실패", ex);
+            }
+            finally
+            {
+                CompleteCapture(session);
+            }
+        }
+    }
+
+    private void OnCaptureOverlayClosed(
+        CaptureOverlay overlay,
+        ICaptureMode captureMode,
+        CaptureSession session)
+    {
+        if (ReferenceEquals(_activeCaptureOverlay, overlay) &&
+            ReferenceEquals(_captureSessionGate.ActiveSession, session))
+            _activeCaptureOverlay = null;
+
+        bool startedScrollCapture = false;
+        try
+        {
+            if (_isExiting)
+            {
+                overlay.Result?.Image.Dispose();
+                return;
+            }
+
             if (overlay.Result != null)
             {
-                HandleCaptureResult(overlay.Result);
+                HandleCaptureResult(overlay.Result, session.Mode, session.EditorAutoTranslate);
+                return;
             }
-            else if (captureMode is ScrollCaptureMode scrollMode && scrollMode.IsComplete)
+
+            if (captureMode is ScrollCaptureMode scrollMode && scrollMode.IsComplete)
             {
-                // Phase 2: 오버레이 닫힌 후 컨테이너 감지 + 스크롤 캡쳐
-                System.Threading.Tasks.Task.Run(() => scrollMode.PerformScrollCapture())
-                    .ContinueWith(_ =>
-                    {
-                        var stitched = scrollMode.GetStitchedBitmap();
-                        if (stitched != null)
-                            HandleCaptureResult(new CaptureResult
-                            {
-                                Image = stitched,
-                                Region = new System.Drawing.Rectangle(0, 0, stitched.Width, stitched.Height)
-                            });
-                    }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+                StartScrollCapturePhaseTwo(scrollMode, session);
+                startedScrollCapture = true;
+                return;
             }
-        };
-        overlay.Start(captureMode);
+        }
+        catch (Exception ex)
+        {
+            ReportCaptureFailure("캡처 처리 실패", ex);
+        }
+        finally
+        {
+            if (!startedScrollCapture)
+                CompleteCapture(session);
+        }
+    }
+
+    private void StartScrollCapturePhaseTwo(
+        ScrollCaptureMode scrollMode,
+        CaptureSession session)
+    {
+        System.Threading.Tasks.Task.Run(scrollMode.PerformScrollCapture)
+            .ContinueWith(task =>
+            {
+                try
+                {
+                    if (task.IsFaulted)
+                    {
+                        if (_isExiting || Dispatcher.HasShutdownStarted)
+                            return;
+
+                        throw task.Exception?.GetBaseException() ?? new InvalidOperationException("스크롤 캡처에 실패했습니다.");
+                    }
+
+                    var stitched = scrollMode.GetStitchedBitmap();
+                    if (_isExiting || Dispatcher.HasShutdownStarted)
+                    {
+                        stitched?.Dispose();
+                        return;
+                    }
+
+                    if (stitched == null)
+                    {
+                        _trayIcon.ShowBalloonTip(
+                            4000,
+                            "신캡쳐 — 스크롤 캡처 실패",
+                            "캡처 이미지를 만들지 못했습니다. 다시 시도하세요.",
+                            System.Windows.Forms.ToolTipIcon.Error);
+                        DiagnosticLog.Write("Capture", "Scroll capture phase two completed without an image.");
+                        return;
+                    }
+
+                    HandleCaptureResult(
+                        new CaptureResult
+                        {
+                            Image = stitched,
+                            Region = new System.Drawing.Rectangle(0, 0, stitched.Width, stitched.Height)
+                        },
+                        session.Mode,
+                        session.EditorAutoTranslate);
+                }
+                catch (Exception ex)
+                {
+                    ReportCaptureFailure("스크롤 캡처 실패", ex);
+                }
+                finally
+                {
+                    CompleteCapture(session);
+                }
+            }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void CompleteCapture(CaptureSession session)
+    {
+        if (_captureSessionGate.Complete(session))
+            _activeCaptureOverlay = null;
+    }
+
+    private void ReportCaptureFailure(string message, Exception ex)
+    {
+        try
+        {
+            DiagnosticLog.Write("Capture", message, ex);
+            if (!_isExiting)
+            {
+                _trayIcon.ShowBalloonTip(
+                    4000,
+                    $"신캡쳐 — {message}",
+                    ex.Message,
+                    System.Windows.Forms.ToolTipIcon.Error);
+            }
+        }
+        catch
+        {
+            // Reporting must not keep the capture gate closed.
+        }
     }
 
     private EditorWindow? _editorWindow;
@@ -243,15 +385,14 @@ public partial class MainWindow : Window
     {
         editor.CaptureRequested += (mode, autoTranslate) =>
         {
-            _editorAutoTranslate = autoTranslate;
-            StartCapture(mode);
+            StartCapture(mode, autoTranslate);
         };
     }
 
-    private void HandleCaptureResult(CaptureResult result)
+    private void HandleCaptureResult(CaptureResult result, CaptureMode mode, bool editorAutoTranslate)
     {
         // 텍스트 캡쳐 모드: OCR → 클립보드(텍스트) → 토스트. 이미지 클립보드/편집기 분기 X.
-        if (_lastCaptureMode == CaptureMode.Text)
+        if (mode == CaptureMode.Text)
         {
             RunOcrAndNotify(result.Image);
             return;
@@ -272,9 +413,8 @@ public partial class MainWindow : Window
             switch (_settings.Capture.AfterCapture)
             {
                 case AfterCaptureAction.OpenEditor:
-                    bool autoOcr = _lastCaptureMode == CaptureMode.Translate;
-                    bool autoTranslate = autoOcr && _editorAutoTranslate;
-                    _editorAutoTranslate = false;
+                    bool autoOcr = mode == CaptureMode.Translate;
+                    bool autoTranslate = autoOcr && editorAutoTranslate;
                     if (_editorWindow != null)
                     {
                         _editorWindow.LoadNewCapture(imageSource, autoOcr, autoTranslate);
@@ -326,7 +466,7 @@ public partial class MainWindow : Window
             result.Image.Dispose();
             DiagnosticLog.Write(
                 "Capture",
-                $"mode={_lastCaptureMode}, size={result.Region.Width}x{result.Region.Height}, " +
+                $"mode={mode}, size={result.Region.Width}x{result.Region.Height}, " +
                 $"convert={convertedAtMs}ms, dispatch={stopwatch.ElapsedMilliseconds}ms");
         }
     }
@@ -863,6 +1003,12 @@ public partial class MainWindow : Window
             _editorWindow = null;
             if (editorWindow != null)
                 RunCleanupStep("Failed to close the editor window", editorWindow.ForceClose);
+
+            CaptureOverlay? activeCaptureOverlay = _activeCaptureOverlay;
+            _captureSessionGate.Reset();
+            _activeCaptureOverlay = null;
+            if (activeCaptureOverlay != null)
+                RunCleanupStep("Failed to close the capture overlay", activeCaptureOverlay.Close);
 
             RunCleanupStep("Failed to hide the tray icon", () => _trayIcon.Visible = false);
             RunCleanupStep("Failed to dispose the tray icon", _trayIcon.Dispose);

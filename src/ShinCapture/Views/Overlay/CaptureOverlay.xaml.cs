@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -21,6 +22,8 @@ public partial class CaptureOverlay : Window
     private readonly Stopwatch _pointerRenderStopwatch = Stopwatch.StartNew();
     private readonly Stopwatch _magnifierStopwatch = Stopwatch.StartNew();
     private bool _finishStarted;
+    private bool _isClosed;
+    private CancellationTokenSource? _finishCancellation;
 
     // Custom render host
     private readonly RenderDrawingVisual _renderVisual = new();
@@ -47,6 +50,7 @@ public partial class CaptureOverlay : Window
 
     public void Start(ICaptureMode mode)
     {
+        _isClosed = false;
         _mode = mode;
 
         // 1. Capture the full virtual screen
@@ -74,7 +78,14 @@ public partial class CaptureOverlay : Window
         // 5. Initialize mode (after layout so ActualWidth/Height are valid)
         Dispatcher.InvokeAsync(() =>
         {
-            _mode.Initialize(_screenBitmap, RootGrid);
+            if (_isClosed || _mode != mode || _screenBitmap == null) return;
+            try { _mode.Initialize(_screenBitmap, RootGrid); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write("CaptureOverlay", "캡처 초기화 실패", ex);
+                CancelCapture();
+                return;
+            }
 
             // FullscreenCaptureMode is immediately complete
             if (_mode.IsComplete)
@@ -86,12 +97,21 @@ public partial class CaptureOverlay : Window
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (_finishStarted)
+        {
+            if (e.ChangedButton == MouseButton.Right) CancelCapture();
+            return;
+        }
         _mode?.OnMouseDown(e);
+        if (_mode?.IsCancelled == true) { CancelCapture(); return; }
+        CaptureStatusBorder.Visibility = Visibility.Collapsed;
+        if (_mode is SmartCutCaptureMode && e.ChangedButton == MouseButton.Left) CaptureMouse();
         Redraw();
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
+        if (_finishStarted) return;
         _mode?.OnMouseMove(e);
         System.Windows.Point position = e.GetPosition(this);
 
@@ -119,7 +139,16 @@ public partial class CaptureOverlay : Window
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_finishStarted)
+        {
+            if (e.ChangedButton == MouseButton.Right) CancelCapture();
+            return;
+        }
         _mode?.OnMouseUp(e);
+        if (_mode?.IsCancelled == true) { CancelCapture(); return; }
+        ReleaseMouseCapture();
+        if (_mode is SmartCutCaptureMode && !_mode.IsComplete)
+            CaptureStatusBorder.Visibility = Visibility.Visible;
         Redraw();
 
         if (_mode?.IsComplete == true)
@@ -130,16 +159,16 @@ public partial class CaptureOverlay : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (_finishStarted)
+        if (e.Key == Key.Escape)
         {
+            _mode?.OnKeyDown(e);
+            CancelCapture();
             e.Handled = true;
             return;
         }
-
-        if (e.Key == Key.Escape)
+        if (_finishStarted)
         {
-            Result = null;
-            Close();
+            e.Handled = true;
             return;
         }
 
@@ -269,15 +298,22 @@ public partial class CaptureOverlay : Window
         }
 
         _finishStarted = true;
-        IsHitTestVisible = false;
+        _finishCancellation = new CancellationTokenSource();
+        CancellationToken cancellationToken = _finishCancellation.Token;
+        ICaptureMode activeMode = _mode;
         Cursor = Cursors.Wait;
+        if (activeMode is SmartCutCaptureMode)
+        {
+            CaptureStatusText.Text = "스마트 컷 처리 중... Esc로 취소할 수 있습니다.";
+            CaptureStatusBorder.Visibility = Visibility.Visible;
+        }
         Bitmap? cropped = null;
         try
         {
             cropped = ScreenHelper.CropBitmap(_screenBitmap, region.Value);
 
             // 마스크/GrabCut은 UI 스레드를 막지 않도록 백그라운드에서 처리한다.
-            if (_mode is ShinCapture.Capture.FreeformCaptureMode freeform)
+            if (activeMode is ShinCapture.Capture.FreeformCaptureMode freeform)
             {
                 Bitmap input = cropped;
                 Bitmap masked = await Task.Run(() => freeform.ApplyMask(input));
@@ -287,10 +323,11 @@ public partial class CaptureOverlay : Window
                     cropped = masked;
                 }
             }
-            else if (_mode is ShinCapture.Capture.SmartCutCaptureMode smartCut)
+            else if (activeMode is ShinCapture.Capture.SmartCutCaptureMode smartCut)
             {
                 Bitmap input = cropped;
-                Bitmap smart = await Task.Run(() => smartCut.ApplyGrabCut(input));
+                PointF[] localPolygon = smartCut.GetLocalPolygon(region.Value);
+                Bitmap smart = await Task.Run(() => smartCut.ApplyGrabCut(input, localPolygon, cancellationToken), cancellationToken);
                 if (!ReferenceEquals(smart, input))
                 {
                     input.Dispose();
@@ -298,6 +335,8 @@ public partial class CaptureOverlay : Window
                 }
             }
 
+            if (cancellationToken.IsCancellationRequested || activeMode.IsCancelled || !IsVisible)
+                return;
             Result = new CaptureResult
             {
                 Image = cropped,
@@ -308,17 +347,37 @@ public partial class CaptureOverlay : Window
         catch (Exception ex)
         {
             Result = null;
-            DiagnosticLog.Write("CaptureOverlay", "선택 영역 후처리 실패", ex);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                DiagnosticLog.Write("CaptureOverlay", "선택 영역 후처리 실패", ex);
+                if (activeMode is SmartCutCaptureMode)
+                    MessageBox.Show(this, "스마트 컷 처리에 실패했습니다. 다시 캡처해 주세요.", "스마트 컷", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         finally
         {
             cropped?.Dispose();
-            Close();
+            _finishCancellation?.Dispose();
+            _finishCancellation = null;
+            if (!_isClosed) Close();
         }
+    }
+
+    private void CancelCapture()
+    {
+        if (_isClosed) return;
+        _isClosed = true;
+        _finishCancellation?.Cancel();
+        ReleaseMouseCapture();
+        Result = null;
+        Close();
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _isClosed = true;
+        _finishCancellation?.Cancel();
+        ReleaseMouseCapture();
         ScreenImage.Source = null;
         MagnifierImage.Source = null;
         _mode = null;

@@ -1,237 +1,107 @@
 using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
-using OpenCvSharp;
-using OpenCvSharp.Extensions;
 using MediaPen = System.Windows.Media.Pen;
-using SDPoint = System.Drawing.Point;
 
 namespace ShinCapture.Capture;
 
-/// <summary>
-/// 자유형 다각형 입력을 받고 GrabCut으로 객체 경계를 픽셀 단위 정밀화하는 캡쳐 모드.
-/// FreeformCaptureMode와 마우스/렌더 흐름은 동일하나, ApplyMask 단계에서 GrabCut을 추가 실행.
-/// </summary>
 public class SmartCutCaptureMode : ICaptureMode
 {
     private Bitmap? _screenBitmap;
     private FrameworkElement? _overlay;
-
-    private double _scaleX = 1.0;
-    private double _scaleY = 1.0;
-
-    private bool _isDrawing = false;
+    private double _scaleX = 1, _scaleY = 1;
+    private bool _isDrawing;
     private readonly List<System.Windows.Point> _points = new();
-
-    public bool IsComplete { get; private set; } = false;
-    public bool IsCancelled { get; private set; } = false;
+    public bool IsComplete { get; private set; }
+    public bool IsCancelled { get; private set; }
 
     public void Initialize(Bitmap screenBitmap, FrameworkElement overlay)
     {
         _screenBitmap = screenBitmap;
         _overlay = overlay;
-        if (overlay.ActualWidth > 0 && screenBitmap.Width > 0)
-            _scaleX = screenBitmap.Width / overlay.ActualWidth;
-        if (overlay.ActualHeight > 0 && screenBitmap.Height > 0)
-            _scaleY = screenBitmap.Height / overlay.ActualHeight;
+        _scaleX = overlay.ActualWidth > 0 ? screenBitmap.Width / overlay.ActualWidth : 1;
+        _scaleY = overlay.ActualHeight > 0 ? screenBitmap.Height / overlay.ActualHeight : 1;
+        _points.Clear();
+        _isDrawing = false;
+        IsComplete = false;
+        IsCancelled = false;
     }
 
     public void OnMouseDown(MouseButtonEventArgs e)
     {
-        if (e.LeftButton == MouseButtonState.Pressed)
-        {
-            _points.Clear();
-            _isDrawing = true;
-            _points.Add(e.GetPosition(_overlay));
-        }
-        else if (e.ChangedButton == MouseButton.Right)
-        {
-            IsCancelled = true;
-        }
+        if (e.ChangedButton == MouseButton.Right) { Cancel(); return; }
+        if (IsCancelled || e.LeftButton != MouseButtonState.Pressed || _overlay == null) return;
+        _points.Clear(); IsComplete = false; _isDrawing = true;
+        _points.Add(e.GetPosition(_overlay));
     }
 
     public void OnMouseMove(MouseEventArgs e)
     {
-        if (_isDrawing) _points.Add(e.GetPosition(_overlay));
+        if (_isDrawing && !IsCancelled && _overlay != null)
+        {
+            System.Windows.Point point = e.GetPosition(_overlay);
+            if (_points.Count == 0 || (point - _points[^1]).LengthSquared >= 1) _points.Add(point);
+        }
     }
 
     public void OnMouseUp(MouseButtonEventArgs e)
     {
-        if (_isDrawing && e.LeftButton == MouseButtonState.Released)
+        if (!_isDrawing || e.ChangedButton != MouseButton.Left) return;
+        if (_overlay != null)
         {
-            _isDrawing = false;
-            if (_points.Count > 10) IsComplete = true;
+            System.Windows.Point point = e.GetPosition(_overlay);
+            if (_points.Count == 0 || (point - _points[^1]).LengthSquared >= 1) _points.Add(point);
         }
+        _isDrawing = false;
+        IsComplete = SmartCutGeometry.TryCloseAndValidate(_points, _overlay?.ActualWidth ?? 0, _overlay?.ActualHeight ?? 0, out List<System.Windows.Point> closed);
+        if (IsComplete) { _points.Clear(); _points.AddRange(closed); }
     }
 
-    public void Render(System.Windows.Media.DrawingContext dc, double overlayWidth, double overlayHeight)
+    public void OnKeyDown(KeyEventArgs e) { if (e.Key == Key.Escape) Cancel(); }
+
+    public void Cancel() { IsCancelled = true; IsComplete = false; _isDrawing = false; }
+
+    public void Render(DrawingContext dc, double overlayWidth, double overlayHeight)
     {
         if (_points.Count < 2) return;
-
-        var dimBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x88, 0, 0, 0));
-        dc.DrawRectangle(dimBrush, null, new System.Windows.Rect(0, 0, overlayWidth, overlayHeight));
-
-        // SmartCut은 매젠타 점선 (자유캡쳐는 흰색 점선)
-        var pen = new MediaPen(System.Windows.Media.Brushes.Magenta, 2.0)
-        {
-            DashStyle = DashStyles.Dash
-        };
+        dc.DrawRectangle(new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x88, 0, 0, 0)), null, new Rect(0, 0, overlayWidth, overlayHeight));
+        var pen = new MediaPen(System.Windows.Media.Brushes.Magenta, 2) { DashStyle = DashStyles.Dash };
         var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
+        using (StreamGeometryContext context = geometry.Open())
         {
-            ctx.BeginFigure(_points[0], false, false);
-            for (int i = 1; i < _points.Count; i++)
-                ctx.LineTo(_points[i], true, false);
+            context.BeginFigure(_points[0], false, false);
+            for (int i = 1; i < _points.Count; i++) context.LineTo(_points[i], true, false);
         }
-        geometry.Freeze();
-        dc.DrawGeometry(null, pen, geometry);
+        geometry.Freeze(); dc.DrawGeometry(null, pen, geometry);
     }
 
     public Rectangle? GetSelectedRegion()
     {
-        if (!IsComplete || _points.Count == 0) return null;
-        var bounds = GetBounds();
-        int x = (int)Math.Round(bounds.Left * _scaleX);
-        int y = (int)Math.Round(bounds.Top * _scaleY);
-        int right = (int)Math.Round((bounds.Left + bounds.Width) * _scaleX);
-        int bottom = (int)Math.Round((bounds.Top + bounds.Height) * _scaleY);
-        return new Rectangle(x, y, right - x, bottom - y);
+        if (!IsComplete || _screenBitmap == null) return null;
+        Rectangle region = SmartCutGeometry.ComputeClampedRegion(_points, _scaleX, _scaleY, _screenBitmap.Width, _screenBitmap.Height);
+        return region.IsEmpty ? null : region;
     }
 
-    private System.Windows.Rect GetBounds()
+    public Bitmap ApplyGrabCut(Bitmap croppedBitmap, CancellationToken cancellationToken = default)
     {
-        double minX = double.MaxValue, minY = double.MaxValue;
-        double maxX = double.MinValue, maxY = double.MinValue;
-        foreach (var p in _points)
-        {
-            if (p.X < minX) minX = p.X;
-            if (p.Y < minY) minY = p.Y;
-            if (p.X > maxX) maxX = p.X;
-            if (p.Y > maxY) maxY = p.Y;
-        }
-        return new System.Windows.Rect(minX, minY, maxX - minX, maxY - minY);
+        ArgumentNullException.ThrowIfNull(croppedBitmap);
+        cancellationToken.ThrowIfCancellationRequested();
+        Rectangle? selected = GetSelectedRegion();
+        if (!IsComplete || selected is not Rectangle region) return croppedBitmap;
+        return ApplyGrabCut(croppedBitmap, GetLocalPolygon(region), cancellationToken);
     }
 
-    /// <summary>
-    /// bounding-box로 잘린 비트맵에 GrabCut을 적용해 객체 경계만 알파로 마스킹.
-    /// 다각형 안 = "probable foreground", 다각형 밖 = "definite background"로 init.
-    /// </summary>
-    public Bitmap ApplyGrabCut(Bitmap croppedBitmap)
+    public PointF[] GetLocalPolygon(Rectangle region) =>
+        SmartCutGeometry.ToLocalPolygon(_points.ToArray(), _scaleX, _scaleY, region);
+
+    public Bitmap ApplyGrabCut(Bitmap croppedBitmap, IReadOnlyList<PointF> localPolygon, CancellationToken cancellationToken = default)
     {
-        if (_points.Count < 3 || croppedBitmap == null) return croppedBitmap!;
-
-        var bounds = GetBounds();
-
-        // overlay 좌표 → cropped 비트맵 픽셀 좌표 (FreeformCaptureMode와 동일)
-        var localPoints = new System.Drawing.PointF[_points.Count];
-        for (int i = 0; i < _points.Count; i++)
-        {
-            localPoints[i] = new System.Drawing.PointF(
-                (float)((_points[i].X - bounds.X) * _scaleX),
-                (float)((_points[i].Y - bounds.Y) * _scaleY));
-        }
-
-        int w = croppedBitmap.Width;
-        int h = croppedBitmap.Height;
-
-        // BGR Mat 변환 (GrabCut은 3채널 입력 요구)
-        using var src = BitmapConverter.ToMat(croppedBitmap);
-        using var src3 = new Mat();
-        if (src.Channels() == 4)
-        {
-            Cv2.CvtColor(src, src3, ColorConversionCodes.BGRA2BGR);
-        }
-        else if (src.Channels() == 3)
-        {
-            src.CopyTo(src3);
-        }
-        else
-        {
-            Cv2.CvtColor(src, src3, ColorConversionCodes.GRAY2BGR);
-        }
-
-        // 마스크 초기화: 기본 GC_BGD, 다각형 안은 GC_PR_FGD
-        using var mask = new Mat(h, w, MatType.CV_8UC1, new Scalar((double)GrabCutClasses.BGD));
-        var ocvPoly = localPoints.Select(p => new OpenCvSharp.Point((int)p.X, (int)p.Y)).ToArray();
-        Cv2.FillPoly(mask, new[] { ocvPoly }, new Scalar((double)GrabCutClasses.PR_FGD));
-
-        using var bgdModel = new Mat();
-        using var fgdModel = new Mat();
-
-        // GrabCut 실행 (마스크 초기화 모드, 5회 반복)
-        Cv2.GrabCut(src3, mask, default(OpenCvSharp.Rect),
-            bgdModel, fgdModel, 5, GrabCutModes.InitWithMask);
-
-        // 결과 마스크: GC_FGD(1) 또는 GC_PR_FGD(3) 픽셀만 전경
-        using var fgMask = new Mat();
-        Cv2.Compare(mask, new Scalar((double)GrabCutClasses.PR_FGD), fgMask, CmpType.EQ);
-        using var fgMask2 = new Mat();
-        Cv2.Compare(mask, new Scalar((double)GrabCutClasses.FGD), fgMask2, CmpType.EQ);
-        Cv2.BitwiseOr(fgMask, fgMask2, fgMask);
-
-        // BGRA 결과 비트맵 생성: 전경 픽셀은 원본 색 + 알파 255, 배경은 알파 0
-        var result = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        try
-        {
-            var sourceData = croppedBitmap.LockBits(
-                new Rectangle(0, 0, w, h),
-                System.Drawing.Imaging.ImageLockMode.ReadOnly,
-                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            try
-            {
-                var resultData = result.LockBits(
-                    new Rectangle(0, 0, w, h),
-                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
-                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                try
-                {
-                    unsafe
-                    {
-                        for (int y = 0; y < h; y++)
-                        {
-                            byte* srcRow = (byte*)sourceData.Scan0 + y * sourceData.Stride;
-                            byte* dstRow = (byte*)resultData.Scan0 + y * resultData.Stride;
-                            byte* maskRow = (byte*)fgMask.Ptr(y);
-                            for (int x = 0; x < w; x++)
-                            {
-                                int offset = x * 4;
-                                if (maskRow[x] != 0)
-                                {
-                                    dstRow[offset + 0] = srcRow[offset + 0];
-                                    dstRow[offset + 1] = srcRow[offset + 1];
-                                    dstRow[offset + 2] = srcRow[offset + 2];
-                                    dstRow[offset + 3] = 255;
-                                }
-                                else
-                                {
-                                    dstRow[offset + 0] = 0;
-                                    dstRow[offset + 1] = 0;
-                                    dstRow[offset + 2] = 0;
-                                    dstRow[offset + 3] = 0;
-                                }
-                            }
-                        }
-                    }
-                }
-                finally
-                {
-                    result.UnlockBits(resultData);
-                }
-            }
-            finally
-            {
-                croppedBitmap.UnlockBits(sourceData);
-            }
-            return result;
-        }
-        catch
-        {
-            result.Dispose();
-            throw;
-        }
+        ArgumentNullException.ThrowIfNull(croppedBitmap);
+        ArgumentNullException.ThrowIfNull(localPolygon);
+        return SmartCutProcessor.Process(croppedBitmap, localPolygon, cancellationToken);
     }
 }

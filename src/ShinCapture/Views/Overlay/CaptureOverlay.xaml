@@ -10,6 +10,13 @@
 
     <Grid x:Name="RootGrid">
 
+        <Border x:Name="CaptureStatusBorder" Panel.ZIndex="20" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,24,0,0" Padding="14,8" MaxWidth="520" Background="#DD202020" Visibility="Collapsed"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="CaptureStatusText" Foreground="White" FontSize="14" TextWrapping="Wrap"
+                       Text="다시 둘러싸거나 Esc로 취소하세요." />
+        </Border>
+
         <!-- Frozen screen background -->
         <Image x:Name="ScreenImage" Stretch="Fill" />
 
