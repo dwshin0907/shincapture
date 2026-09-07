@@ -252,6 +252,13 @@
 
                         <Separator Margin="0,4,0,10"/>
 
+                        <CheckBox x:Name="ChkRegionCaptureShiftFirst" Margin="0,0,0,6"
+                                  Content="영역 캡처: Shift → Ctrl → C 순서로만 실행 (한글 호환)"
+                                  Checked="OnShiftFirstChanged" Unchecked="OnShiftFirstChanged"/>
+                        <TextBlock Text="기본값은 끔입니다. 켜면 Ctrl → Shift → C는 한글 등 현재 앱에 전달됩니다. 영역 캡처에 Ctrl+Shift+C를 지정한 경우에만 적용됩니다."
+                                   TextWrapping="Wrap" Margin="20,0,0,12" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+
                         <CheckBox x:Name="ChkOverridePrintScreen"
                                   Content="PrintScreen 키를 신캡쳐가 독점 사용" Margin="0,0,0,10"
                                   ToolTip="Windows 11의 'PrtSc 키로 화면 캡쳐 열기' 설정을 자동으로 꺼서, PrintScreen 키가 신캡쳐로 전달되도록 합니다. 해제하면 Windows 기본 동작(캡쳐 도구 열기)으로 되돌립니다."/>

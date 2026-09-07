@@ -7,7 +7,8 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundPrimaryBrush}"
         FontFamily="{DynamicResource AppFont}"
-        FontSize="{DynamicResource FontSizeNormal}">
+        FontSize="{DynamicResource FontSizeNormal}"
+        AllowDrop="True" PreviewDragOver="OnImageFileDragOver" PreviewDrop="OnImageFileDrop">
     <Window.Resources>
         <controls:TrayIconGeometryConverter x:Key="EditorIcon"/>
         <Style x:Key="HistoryItemFocusVisual">

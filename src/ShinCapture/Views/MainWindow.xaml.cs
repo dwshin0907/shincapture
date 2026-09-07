@@ -155,7 +155,8 @@ public partial class MainWindow : Window
         void Reg(string label, string hotkey, CaptureMode mode)
         {
             if (string.IsNullOrWhiteSpace(hotkey)) return;
-            if (_hotkeyManager.Register(hotkey, () => StartCapture(mode)) < 0)
+            if (_hotkeyManager.Register(hotkey, () => StartCapture(mode),
+                mode == CaptureMode.Region && _settings.Hotkeys.RegionCaptureShiftFirst) < 0)
                 failures.Add($"{label}({hotkey})");
         }
 

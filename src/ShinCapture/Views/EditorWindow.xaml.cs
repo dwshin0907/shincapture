@@ -518,7 +518,12 @@ public partial class EditorWindow : Window
             else return; // 다른 단축키는 가로채지 않음
         }
 
-        if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            OnOpenImageClick(this, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
         {
             _commandStack.Undo();
             e.Handled = true;
@@ -645,7 +650,13 @@ public partial class EditorWindow : Window
 
         UpdateToolLayout(EditorChromeLayoutPolicy.Resolve(Width).DirectToolVisibility);
 
+        Button openImageBtn = CreateCommandButton("folder", "열기", "이미지 파일 열기 (Ctrl+O) · 파일을 창에 끌어 놓아도 됩니다.");
+        openImageBtn.Click += OnOpenImageClick;
+        UtilityCommandPanel.Children.Add(openImageBtn);
         UtilityCommandPanel.Children.Add(CreateImageTransformMenuButton());
+        Button watermarkBtn = CreateCommandButton("text", "워터마크", "반투명 문구를 이미지에 넣기");
+        watermarkBtn.Click += OnWatermarkClick;
+        UtilityCommandPanel.Children.Add(watermarkBtn);
         UtilityCommandPanel.Children.Add(CreateAiMenuButton());
         UtilityCommandPanel.Children.Add(CreateSeparator());
 
@@ -1962,6 +1973,7 @@ public partial class EditorWindow : Window
         {
             using IDisposable pathLease = _dragExportService.Protect(path);
             var data = new DataObject();
+            data.SetData("ShinCapture.HistoryExport", true);
             data.SetFileDropList(new StringCollection { path });
             string textPath = path.Contains(' ')
                 ? $"\"{path}\""

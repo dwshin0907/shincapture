@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using ShinCapture.Helpers;
+using ShinCapture.Services.Hotkeys;
 
 namespace ShinCapture.Services;
 
@@ -26,6 +27,8 @@ public class HotkeyManager : IDisposable
     private readonly Dictionary<int, Binding> _bindings = new();
     private int _nextId = 1;
     private bool _suspended;
+    private OrderedCaptureHotkey? _orderedCapture;
+    private int _orderedCaptureId = -1;
 
     /// <summary>앱 전역에서 하나뿐인 인스턴스(설정창이 소유자 경로와 무관하게 접근). Initialize에서 설정됨.</summary>
     public static HotkeyManager? Current { get; private set; }
@@ -39,9 +42,22 @@ public class HotkeyManager : IDisposable
         Current = this;
     }
 
-    public int Register(string hotkeyString, Action action)
+    public int Register(string hotkeyString, Action action, bool shiftFirst = false)
     {
         ParseHotkeyString(hotkeyString, out uint modifiers, out uint vk);
+        if ((_orderedCapture != null && IsCtrlShiftC(hotkeyString))
+            || _bindings.Values.Any(b => (b.Modifiers & ~NativeMethods.MOD_NOREPEAT) == modifiers && b.Vk == vk))
+            return -1;
+        if (shiftFirst && IsCtrlShiftC(hotkeyString))
+        {
+            if (_orderedCapture != null || _source == null) return -1;
+            var ordered = new OrderedCaptureHotkey(_source.Dispatcher, action);
+            if (!ordered.Start()) { ordered.Dispose(); return -1; }
+            _orderedCapture = ordered;
+            _orderedCaptureId = _nextId++;
+            _suspended = false;
+            return _orderedCaptureId;
+        }
         modifiers |= NativeMethods.MOD_NOREPEAT;
         var id = _nextId++;
         if (NativeMethods.RegisterHotKey(_hwnd, id, modifiers, vk))
@@ -55,6 +71,12 @@ public class HotkeyManager : IDisposable
 
     public void Unregister(int id)
     {
+        if (id == _orderedCaptureId)
+        {
+            _orderedCapture?.Dispose();
+            _orderedCapture = null;
+            _orderedCaptureId = -1;
+        }
         if (_bindings.ContainsKey(id))
         {
             NativeMethods.UnregisterHotKey(_hwnd, id);
@@ -64,6 +86,7 @@ public class HotkeyManager : IDisposable
 
     public void UnregisterAll()
     {
+        Unregister(_orderedCaptureId);
         foreach (var id in _bindings.Keys.ToList())
             NativeMethods.UnregisterHotKey(_hwnd, id);
         _bindings.Clear();
@@ -74,6 +97,7 @@ public class HotkeyManager : IDisposable
     public void Suspend()
     {
         if (_suspended) return;
+        _orderedCapture?.SetEnabled(false);
         foreach (var id in _bindings.Keys)
             NativeMethods.UnregisterHotKey(_hwnd, id);
         _suspended = true;
@@ -83,6 +107,7 @@ public class HotkeyManager : IDisposable
     public void Resume()
     {
         if (!_suspended) return;
+        _orderedCapture?.SetEnabled(true);
         foreach (var kv in _bindings)
             NativeMethods.RegisterHotKey(_hwnd, kv.Key, kv.Value.Modifiers, kv.Value.Vk);
         _suspended = false;
@@ -90,9 +115,10 @@ public class HotkeyManager : IDisposable
 
     /// <summary>이 조합을 지금 전역 등록 가능한지 프로브한다(성공 시 즉시 해제). UI 스레드에서 호출.
     /// 설정창은 Suspend 상태에서 호출하므로 자기 자신과 충돌하지 않는다.</summary>
-    public bool IsAvailable(string hotkeyString)
+    public bool IsAvailable(string hotkeyString, bool shiftFirst = false)
     {
         if (string.IsNullOrWhiteSpace(hotkeyString)) return true;
+        if (shiftFirst && IsCtrlShiftC(hotkeyString)) return true;
         ParseHotkeyString(hotkeyString, out uint modifiers, out uint vk);
         if (vk == 0) return false;
         modifiers |= NativeMethods.MOD_NOREPEAT;
@@ -107,7 +133,7 @@ public class HotkeyManager : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == NativeMethods.WM_HOTKEY)
+        if (msg == NativeMethods.WM_HOTKEY && !_suspended)
         {
             var id = wParam.ToInt32();
             if (_bindings.TryGetValue(id, out var binding))
@@ -150,6 +176,12 @@ public class HotkeyManager : IDisposable
                     break;
             }
         }
+    }
+
+    public static bool IsCtrlShiftC(string hotkey)
+    {
+        ParseHotkeyString(hotkey, out var modifiers, out var vk);
+        return modifiers == (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT) && vk == 0x43;
     }
 
     public void Dispose()

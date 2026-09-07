@@ -118,6 +118,7 @@ public partial class SettingsWindow : Window
         foreach (var row in _hotkeyRows)
             row.Box.Value = row.Def.Get(_settings.Hotkeys);
         ChkOverridePrintScreen.IsChecked = _settings.Hotkeys.OverridePrintScreen;
+        ChkRegionCaptureShiftFirst.IsChecked = _settings.Hotkeys.RegionCaptureShiftFirst;
         RefreshHotkeyConflicts();
 
         // OCR 언어 드롭다운 채우기
@@ -210,6 +211,7 @@ public partial class SettingsWindow : Window
         foreach (var row in _hotkeyRows)
             row.Def.Set(_settings.Hotkeys, row.Box.Value);
         _settings.Hotkeys.OverridePrintScreen = ChkOverridePrintScreen.IsChecked == true;
+        _settings.Hotkeys.RegionCaptureShiftFirst = ChkRegionCaptureShiftFirst.IsChecked == true;
 
         var ocrLangTag = (CmbOcrLanguage.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString();
         if (!string.IsNullOrEmpty(ocrLangTag))
@@ -482,7 +484,9 @@ public partial class SettingsWindow : Window
                 continue;
             }
 
-            bool available = _hotkeyManager?.IsAvailable(val) ?? true;
+            bool shiftFirst = ChkRegionCaptureShiftFirst.IsChecked == true
+                && row.Def.Label.StartsWith("영역지정");
+            bool available = _hotkeyManager?.IsAvailable(val, shiftFirst) ?? true;
             if (!available)
             {
                 row.Badge.Text = "🔴";
@@ -511,6 +515,9 @@ public partial class SettingsWindow : Window
         foreach (var row in _hotkeyRows)
             row.Box.Value = row.Def.Get(defaults);
         ChkOverridePrintScreen.IsChecked = defaults.OverridePrintScreen;
+        ChkRegionCaptureShiftFirst.IsChecked = defaults.RegionCaptureShiftFirst;
         RefreshHotkeyConflicts();
     }
+
+    private void OnShiftFirstChanged(object sender, RoutedEventArgs e) => RefreshHotkeyConflicts();
 }

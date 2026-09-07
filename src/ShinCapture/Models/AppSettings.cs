@@ -50,6 +50,8 @@ public class SaveSettings
 
 public class HotkeySettings
 {
+    // Opt-in compatibility for HWP; existing users keep the order-independent shortcut.
+    public bool RegionCaptureShiftFirst { get; set; } = false;
     public string RegionCapture { get; set; } = "PrintScreen";
     public string RegionCaptureAlt { get; set; } = "Ctrl+Shift+C";
     public string FreeformCapture { get; set; } = "Ctrl+Shift+F";
