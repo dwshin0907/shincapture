@@ -10,7 +10,9 @@
     <AssemblyName>ShinCapture</AssemblyName>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <RootNamespace>ShinCapture</RootNamespace>
-    <Version>1.3.17</Version>
+    <Version>1.3.18</Version>
+    <Product>ShinCapture</Product>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
