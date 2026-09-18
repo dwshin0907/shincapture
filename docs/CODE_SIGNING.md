@@ -7,6 +7,11 @@ only `ShinCapture Test Cert`. The existing policy named `Release Signing` has th
 purpose **Test signing**. No publicly trusted production certificate is currently
 configured, and no release should be described as signed by SignPath Foundation.
 
+The free open-source program application was submitted on 2026-09-18. The form
+confirmed submission with “Form submitted” and “Thank you, we'll be in touch soon.”
+This confirms receipt only, not approval or certificate issuance. Production
+signing remains pending Foundation review and configuration.
+
 The planned provider is [SignPath.io](https://signpath.io/), with a certificate
 from [SignPath Foundation](https://signpath.org/) through its free open-source
 program. This requires Foundation approval. After approval and successful

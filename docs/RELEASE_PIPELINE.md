@@ -15,6 +15,7 @@
 - `release-signing` 정책의 실제 용도도 `Test signing`이다. 이름만 보고 정식 인증서로 판단하지 않는다.
 - 기존 GitHub API 토큰으로 실행한 시험 빌드에서 `Could not authorize against SignPath API`가 발생했다.
 - 정식 무료 서명은 [SignPath Foundation 신청 및 승인](https://signpath.org/apply)이 필요하다.
+- 2026-09-18 신청서를 제출했고 `Form submitted` 접수 완료 화면을 확인했다. 현재 재단 심사 대기이며 인증서 발급 완료가 아니다.
 - 승인 전에는 새 공개 릴리즈를 만들지 않는다. 현재 준비 버전은 1.3.18이며 기존 1.3.17 파일은 유지한다.
 - [Code signing policy](CODE_SIGNING.md)와 [개인정보 처리 안내](PRIVACY.md)를 함께 제공한다.
 
@@ -31,6 +32,11 @@
    토큰은 코드, 명령 기록, 로그, 문서에 기록하지 않는다. 기존 토큰이 거부되면 계정/권한을 확인한 뒤 교체한다.
 5. GitHub Actions `Release`를 수동 실행하여 앱·설치 파일 서명과 검증을 시험한다.
    수동 실행은 공개 Release나 태그를 만들지 않으며 `signed-release-<version>` 아티팩트를 남긴다.
+
+현재 남은 외부 작업은 Foundation 심사·승인, 정식 인증서/정책 연결, 앱·설치 파일 아티팩트 설정 등록이다.
+`SIGNPATH_APP_ARTIFACT_CONFIG`는 아직 설정하지 않았다. 승인 후 실제 등록한 slug를 연결한다.
+이전 인증 오류는 기존 v1 연동으로 확인했으며, 새 v3 연동의 실제 서명은 아직 실행하지 않았다.
+승인 후 최신 연동으로 인증 상태를 다시 확인하고 필요한 경우에만 CI 사용자 토큰을 갱신한다.
 
 ## 순서
 

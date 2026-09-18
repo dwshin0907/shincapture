@@ -12,7 +12,8 @@ Windows OCR과 선택적 AI 번역을 제공하는 Windows 데스크톱 프로�
 
 ## Code signing policy
 
-SignPath Foundation production signing is being prepared. The current account only
+The SignPath Foundation application was submitted on 2026-09-18 and is awaiting
+review. Production signing is being prepared. The current account only
 has a test certificate; existing public releases are unsigned. A test certificate
 does not remove Windows trust warnings. See the [code signing policy](docs/CODE_SIGNING.md)
 for the intended provider, maintainer roles, and release verification requirements.
