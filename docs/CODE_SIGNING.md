@@ -40,7 +40,15 @@ The Inno Setup-generated uninstaller is not separately signed by this pipeline.
 
 ## Release checks
 
-Every public release must pass the test suite and Windows Authenticode validation
+The maintainer explicitly authorized an unsigned public release of **v1.3.18** on
+2026-09-20 while Foundation approval is pending. This version is built and
+published manually with its unsigned status disclosed in the release notes and
+on the download page. It includes SHA-256 checksums and must pass the test suite.
+This exception is limited to v1.3.18; it does not relax the production signing CI
+or authorize unsigned fallback when signing fails. After approval, signed files
+will be published under a new version and tag, preserving existing assets.
+
+Outside this explicit exception, new public releases must pass the test suite and Windows Authenticode validation
 for both `ShinCapture.exe` and the installer. Both must have embedded signatures
 and timestamps. Unsigned files, tampered files, and untrusted test certificates
 are rejected. CI must not add a test certificate to the Windows trust store or
