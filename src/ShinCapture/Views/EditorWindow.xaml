@@ -195,14 +195,31 @@
                     <Border DockPanel.Dock="Top" Padding="10,8"
                             BorderBrush="{DynamicResource BorderLightBrush}" BorderThickness="0,0,0,1">
                         <StackPanel>
-                            <TextBlock Text="캡처 기록" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,6"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock x:Name="HistorySelectionCount" DockPanel.Dock="Right" FontSize="10"
+                                           Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="캡처 기록" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </DockPanel>
+                            <CheckBox x:Name="HistorySelectAllCheckBox" Content="전체 선택" IsThreeState="True"
+                                      FontSize="11" Margin="0,0,0,7" Click="OnHistorySelectAll"
+                                      Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <UniformGrid Columns="2" Margin="0,0,0,4">
+                                <Button x:Name="HistorySaveSelectedBtn" Content="선택 저장" Padding="5,3" Margin="0,0,2,0"
+                                        Style="{DynamicResource SmallButton}" Click="OnHistorySaveSelected"
+                                        ToolTip="선택한 캡처만 편집 내용을 포함해 폴더에 저장"/>
+                                <Button x:Name="HistoryCopyPathsBtn" Content="경로 복사" Padding="5,3" Margin="2,0,0,0"
+                                        Style="{DynamicResource SmallButton}" Click="OnHistoryCopyPaths"
+                                        ToolTip="선택한 캡처를 임시 PNG로 준비하고 경로를 복사 (Ctrl+Shift+C)"/>
+                            </UniformGrid>
                             <UniformGrid Columns="2">
                                 <Button x:Name="HistorySaveAllBtn" Content="전체 저장" Padding="7,3" Margin="0,0,2,0"
                                         Style="{DynamicResource SmallButton}" Click="OnHistorySaveAll"/>
                                 <Button x:Name="HistoryClearBtn" Content="비우기" Padding="7,3" Margin="2,0,0,0"
                                         Style="{DynamicResource SmallButton}" Click="OnHistoryClear"/>
                             </UniformGrid>
+                            <TextBlock Text="체크로 여러 장 선택&#x0a;선택 후 터미널로 드래그" FontSize="10"
+                                       Margin="0,7,0,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </StackPanel>
                     </Border>
                     <!-- Premium content promotion -->

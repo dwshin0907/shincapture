@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -416,6 +415,7 @@ public partial class EditorWindow : Window
         {
             state.Cancelled = true;
             state.PreparationCancellation?.Cancel();
+            state.PathProtection?.Dispose();
         }
         _dragExportStates.Clear();
         _captureObjects.Clear();
@@ -485,14 +485,7 @@ public partial class EditorWindow : Window
 
     private void OnEditorKeyDown(object sender, KeyEventArgs e)
     {
-        if ((e.Key is Key.Up or Key.Down) && HistoryPanel.IsKeyboardFocusWithin)
-        {
-            if (Keyboard.Modifiers == ModifierKeys.None)
-                NavigateCaptureHistory(e.Key);
-
-            e.Handled = true;
-            return;
-        }
+        if (HandleHistorySelectionKey(e)) return;
 
         bool inTextBox = e.OriginalSource is TextBox tb && tb.IsFocused && tb.Text?.Length > 0;
 
@@ -589,24 +582,6 @@ public partial class EditorWindow : Window
             };
             if (toolName != null) { SelectTool(toolName); e.Handled = true; }
         }
-    }
-
-    private void NavigateCaptureHistory(Key key)
-    {
-        BitmapSource currentImage =
-            (Keyboard.FocusedElement as FrameworkElement)?.Tag as BitmapSource
-            ?? _sourceImage;
-        int currentIndex = _captureHistory.IndexOf(currentImage);
-        CaptureHistoryDirection direction = key == Key.Up
-            ? CaptureHistoryDirection.Up
-            : CaptureHistoryDirection.Down;
-        int targetIndex = CaptureHistoryNavigationPolicy.GetTargetIndex(
-            currentIndex,
-            _captureHistory.Count,
-            direction);
-
-        if (targetIndex >= 0 && targetIndex != currentIndex)
-            LoadFromHistory(_captureHistory[targetIndex], focusHistoryItem: true);
     }
 
     private void MoveSelectedByArrow(Key key, bool fine)
@@ -1665,6 +1640,7 @@ public partial class EditorWindow : Window
     private void AddToHistory(BitmapSource image)
     {
         _captureHistory.Insert(0, image);
+        _historySelection.SelectOnly(image);
         int configuredMax = Math.Clamp(
             _settings.RecentCaptures?.MaxCount ?? MaxHistory,
             1,
@@ -1692,17 +1668,24 @@ public partial class EditorWindow : Window
     {
         foreach ((BitmapSource image, Border card) in _historyCards)
         {
-            bool isSelected = image == _sourceImage;
-            card.BorderThickness = new Thickness(isSelected ? 2 : 1);
-            card.BorderBrush = isSelected
+            bool isCurrent = image == _sourceImage;
+            bool isSelected = _historySelection.Contains(image);
+            card.BorderThickness = new Thickness(isCurrent ? 2 : 1);
+            card.BorderBrush = isCurrent || isSelected
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
                 : (System.Windows.Media.Brush)FindResource("DividerBrush");
-            KeyboardNavigation.SetIsTabStop(card, isSelected);
+            card.Background = (System.Windows.Media.Brush)FindResource(
+                isSelected ? "AccentSurfaceBrush" : "BackgroundPrimaryBrush");
+            KeyboardNavigation.SetIsTabStop(card, isCurrent);
+            if (_historyCheckBoxes.TryGetValue(image, out CheckBox? checkBox))
+                checkBox.IsChecked = isSelected;
         }
+        UpdateHistoryBatchActions();
     }
 
     private void BuildHistory()
     {
+        _historySelection.Retain(_captureHistory);
         var reusableCards = new Dictionary<BitmapSource, Border>(_historyCards);
         var reusableIndexLabels = new Dictionary<BitmapSource, TextBlock>(_historyIndexLabels);
         _historyCards.Clear();
@@ -1736,7 +1719,7 @@ public partial class EditorWindow : Window
                 Stretch = System.Windows.Media.Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n클릭: 열기 · 드래그: 다른 앱으로 보내기\n우클릭: 메뉴 · ↑↓: 이동"
+                ToolTip = $"{img.PixelWidth}×{img.PixelHeight}\n체크 / Ctrl+클릭: 여러 장 선택 · Shift: 범위 선택\n드래그: 선택한 이미지들을 터미널·다른 앱으로 보내기"
             };
 
             var cardGrid = new Grid();
@@ -1754,7 +1737,19 @@ public partial class EditorWindow : Window
             Grid.SetRow(footer, 1);
             var footerGrid = new Grid();
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var checkBox = new CheckBox
+            {
+                Tag = img,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 5, 0),
+                ToolTip = "저장·전달할 캡처 선택 (Shift: 범위 선택)"
+            };
+            AutomationProperties.SetName(checkBox, $"캡처 결과 {i + 1} 선택");
+            checkBox.Click += (_, _) => ToggleHistorySelection(img, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            _historyCheckBoxes[img] = checkBox;
+            footerGrid.Children.Add(checkBox);
             var indexLabel = new TextBlock
             {
                 Text = $"#{i + 1}",
@@ -1762,6 +1757,7 @@ public partial class EditorWindow : Window
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush")
             };
+            Grid.SetColumn(indexLabel, 1);
             footerGrid.Children.Add(indexLabel);
             var dimensions = new TextBlock
             {
@@ -1770,7 +1766,7 @@ public partial class EditorWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush")
             };
-            Grid.SetColumn(dimensions, 1);
+            Grid.SetColumn(dimensions, 2);
             footerGrid.Children.Add(dimensions);
             footer.Child = footerGrid;
             cardGrid.Children.Add(footer);
@@ -1801,7 +1797,7 @@ public partial class EditorWindow : Window
                 $"캡처 결과 {i + 1}, {img.PixelWidth} × {img.PixelHeight}");
             AutomationProperties.SetHelpText(
                 border,
-                "클릭하면 열고, 왼쪽 마우스로 끌면 다른 앱으로 보냅니다");
+                "체크박스나 Ctrl·Shift 클릭으로 여러 장을 선택하고, 선택한 이미지를 끌어 터미널이나 다른 앱으로 보냅니다");
 
             var localImg = img;
             AttachHistoryCardInput(border, localImg);
@@ -1877,8 +1873,7 @@ public partial class EditorWindow : Window
                 RemoveCaptureState(localImg);
                 if (localImg == _sourceImage && _captureHistory.Count > 0)
                     LoadFromHistory(_captureHistory[0]);
-                else
-                    BuildHistory();
+                BuildHistory();
                 StatusText.Text = "캡처 기록 삭제됨";
             };
             ctx.Items.Add(miDelete);
@@ -1889,116 +1884,12 @@ public partial class EditorWindow : Window
             _historyIndexLabels[img] = indexLabel;
             HistoryPanel.Children.Add(border);
         }
-    }
-
-    private void AttachHistoryCardInput(Border card, BitmapSource image)
-    {
-        System.Windows.Point dragStart = default;
-        bool isTrackingLeftDrag = false;
-
-        card.PreviewMouseLeftButtonDown += (_, e) =>
+        foreach ((BitmapSource image, CheckBox checkBox) in _historyCheckBoxes)
         {
-            dragStart = e.GetPosition(card);
-            isTrackingLeftDrag = true;
-            card.Focus();
-            card.CaptureMouse();
-            if (image == _sourceImage) SaveCurrentObjects();
-            _ = ScheduleDragExportPreparation(image);
-            e.Handled = true;
-        };
-        card.MouseEnter += (_, _) => _ = ScheduleDragExportPreparation(image);
-
-        card.PreviewMouseMove += (_, e) =>
-        {
-            if (!isTrackingLeftDrag || e.LeftButton != MouseButtonState.Pressed)
-                return;
-
-            System.Windows.Point current = e.GetPosition(card);
-            if (!HistoryCardDragPolicy.ShouldStart(
-                    current.X - dragStart.X,
-                    current.Y - dragStart.Y,
-                    SystemParameters.MinimumHorizontalDragDistance,
-                    SystemParameters.MinimumVerticalDragDistance))
-            {
-                return;
-            }
-
-            isTrackingLeftDrag = false;
-            if (Mouse.Captured == card) card.ReleaseMouseCapture();
-            e.Handled = true;
-            StartHistoryCardDrag(card, image);
-        };
-
-        card.PreviewMouseLeftButtonUp += (_, e) =>
-        {
-            if (!isTrackingLeftDrag) return;
-
-            isTrackingLeftDrag = false;
-            if (Mouse.Captured == card) card.ReleaseMouseCapture();
-            e.Handled = true;
-            LoadFromHistory(image, focusHistoryItem: true);
-        };
-    }
-
-    private async void StartHistoryCardDrag(Border card, BitmapSource image)
-    {
-        if (!TryGetPreparedDragPath(image, out string? preparedPath))
-        {
-            Task<string?>? preparation = ScheduleDragExportPreparation(image);
-            if (preparation == null)
-            {
-                StatusText.Text = "드래그할 캡처 기록을 찾을 수 없습니다";
-                return;
-            }
-
-            StatusText.Text = "드래그 파일 준비 중...";
-            DiagnosticLog.Write("Drag", "드래그 중 내보내기 파일 준비를 기다림");
-            preparedPath = await preparation;
-            if (preparedPath == null || !File.Exists(preparedPath))
-            {
-                StatusText.Text = "드래그 파일을 준비하지 못했습니다";
-                return;
-            }
+            int index = _captureHistory.IndexOf(image);
+            AutomationProperties.SetName(checkBox, $"캡처 결과 {index + 1} 선택");
         }
-        string path = preparedPath!;
-
-        if (Mouse.LeftButton != MouseButtonState.Pressed)
-        {
-            StatusText.Text = "파일 준비 완료 · 마우스 버튼을 누른 채 다시 드래그하세요";
-            return;
-        }
-
-        var stopwatch = Stopwatch.StartNew();
-        try
-        {
-            using IDisposable pathLease = _dragExportService.Protect(path);
-            var data = new DataObject();
-            data.SetData("ShinCapture.HistoryExport", true);
-            data.SetFileDropList(new StringCollection { path });
-            string textPath = path.Contains(' ')
-                ? $"\"{path}\""
-                : path;
-            data.SetText(textPath, TextDataFormat.UnicodeText);
-
-            card.Opacity = 0.62;
-            DragDropEffects effect = System.Windows.DragDrop.DoDragDrop(
-                card, data, DragDropEffects.Copy);
-            StatusText.Text = effect == DragDropEffects.None
-                ? "드래그가 취소되었습니다"
-                : $"외부 앱으로 보냄: {Path.GetFileName(path)}";
-            DiagnosticLog.Write(
-                "Drag",
-                $"effect={effect}, elapsed={stopwatch.ElapsedMilliseconds}ms, file={Path.GetFileName(path)}");
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = "임시 이미지를 만들어 보낼 수 없습니다";
-            DiagnosticLog.Write("Drag", "OLE 드래그 실패", ex);
-        }
-        finally
-        {
-            card.Opacity = 1;
-        }
+        UpdateHistorySelection();
     }
 
     private void InvalidateDragExport(BitmapSource image)
@@ -2006,6 +1897,8 @@ public partial class EditorWindow : Window
         DragExportState state = GetDragExportState(image);
         state.PreparationCancellation?.Cancel();
         state.Generation++;
+        state.PathProtection?.Dispose();
+        state.PathProtection = null;
         state.Path = null;
         state.PreparationGeneration = -1;
         state.PreparationTask = null;
@@ -2106,6 +1999,7 @@ public partial class EditorWindow : Window
 
         var stopwatch = Stopwatch.StartNew();
         bool enteredGate = false;
+        IDisposable? pathProtection = null;
         try
         {
             await _dragExportPreparationGate.WaitAsync(cancellationToken);
@@ -2124,12 +2018,11 @@ public partial class EditorWindow : Window
                 ? EditorCompositeRenderer.RenderBitmapSource(image, snapshot)
                 : image;
             long renderedAtMs = stopwatch.ElapsedMilliseconds;
-            string? path = await Task.Run(
-                () => state.Cancelled
-                    ? null
-                    : _dragExportService.CreatePng(exportImage),
+            var prepared = await Task.Run(
+                () => _dragExportService.CreateProtectedPng(exportImage),
                 cancellationToken);
-            if (path == null) return null;
+            string path = prepared.Path;
+            pathProtection = prepared.Protection;
             cancellationToken.ThrowIfCancellationRequested();
 
             if (!_dragExportStates.TryGetValue(image, out DragExportState? current) ||
@@ -2140,6 +2033,9 @@ public partial class EditorWindow : Window
             }
 
             current.Path = path;
+            current.PathProtection?.Dispose();
+            current.PathProtection = pathProtection;
+            pathProtection = null;
             DiagnosticLog.Write(
                 "DragPrepare",
                 $"render={renderedAtMs}ms, total={stopwatch.ElapsedMilliseconds}ms, " +
@@ -2157,31 +2053,21 @@ public partial class EditorWindow : Window
         }
         finally
         {
+            pathProtection?.Dispose();
             if (enteredGate) _dragExportPreparationGate.Release();
         }
     }
 
-    private bool TryGetPreparedDragPath(BitmapSource image, out string? path)
-    {
-        path = null;
-        if (!_dragExportStates.TryGetValue(image, out DragExportState? state) ||
-            state.Path == null ||
-            !File.Exists(state.Path))
-        {
-            return false;
-        }
-
-        path = state.Path;
-        return true;
-    }
-
     private void RemoveCaptureState(BitmapSource image)
     {
+        _historySelection.Remove(image);
+        _historyCheckBoxes.Remove(image);
         _captureObjects.Remove(image);
         if (_dragExportStates.Remove(image, out DragExportState? state))
         {
             state.Cancelled = true;
             state.PreparationCancellation?.Cancel();
+            state.PathProtection?.Dispose();
         }
         _historyIndexLabels.Remove(image);
         if (_historyCards.Remove(image, out Border? card))
@@ -2196,30 +2082,7 @@ public partial class EditorWindow : Window
         public CancellationTokenSource? PreparationCancellation { get; set; }
         public bool Cancelled { get; set; }
         public string? Path { get; set; }
-    }
-
-    private void OnHistorySaveAll(object sender, RoutedEventArgs e)
-    {
-        if (_captureHistory.Count == 0) { StatusText.Text = "저장할 기록이 없습니다"; return; }
-
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "캡쳐 기록을 저장할 폴더 선택",
-            UseDescriptionForTitle = true
-        };
-        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-
-        int saved = 0;
-        for (int i = 0; i < _captureHistory.Count; i++)
-        {
-            var img = _captureHistory[i];
-            using Bitmap bmp = BitmapHelper.ToBitmap(img);
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            var path = Path.Combine(dialog.SelectedPath, $"신캡쳐_{timestamp}_{i + 1}.png");
-            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-            saved++;
-        }
-        StatusText.Text = $"{saved}개 이미지 저장됨: {dialog.SelectedPath}";
+        public IDisposable? PathProtection { get; set; }
     }
 
     private void OnHistoryClear(object sender, RoutedEventArgs e)
@@ -2239,11 +2102,14 @@ public partial class EditorWindow : Window
         if (result != MessageBoxResult.Yes) return;
 
         _captureHistory.Clear();
+        _historySelection.Clear();
+        _historyCheckBoxes.Clear();
         _captureObjects.Clear();
         foreach (DragExportState state in _dragExportStates.Values)
         {
             state.Cancelled = true;
             state.PreparationCancellation?.Cancel();
+            state.PathProtection?.Dispose();
         }
         _dragExportStates.Clear();
         BuildHistory();

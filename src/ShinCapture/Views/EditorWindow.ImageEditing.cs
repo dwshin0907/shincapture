@@ -87,6 +87,7 @@ public partial class EditorWindow
     private void SetTransformedImage(BitmapSource image)
     {
         int historyIndex = _captureHistory.IndexOf(_sourceImage);
+        _historySelection.Replace(_sourceImage, image);
         RemoveCaptureState(_sourceImage);
         if (historyIndex >= 0) _captureHistory[historyIndex] = image;
         _sourceImage = image;

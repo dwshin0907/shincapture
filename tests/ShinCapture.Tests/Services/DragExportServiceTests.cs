@@ -126,6 +126,38 @@ public sealed class DragExportServiceTests : IDisposable
         Assert.Single(Directory.GetFiles(_tempDir, "ShinCapture_*.png"));
     }
 
+    [Fact]
+    public void OverlappingBatchesKeepSharedFilesProtectedUntilBothAreFinished()
+    {
+        var service = new DragExportService(_tempDir, maxFiles: 1, maxBytes: 1);
+        using var bitmap = new Bitmap(4, 4);
+        string path = service.CreatePng(bitmap);
+        using IDisposable first = service.Protect(path);
+        using IDisposable second = service.Protect(path);
+        first.Dispose();
+        service.Cleanup();
+        Assert.True(File.Exists(path));
+        second.Dispose();
+        service.Cleanup();
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void PreparedImageStaysAvailableBeforeTheBatchContinuationAcquiresItsLease()
+    {
+        var service = new DragExportService(_tempDir, maxFiles: 1, maxBytes: 1);
+        using var bitmap = new Bitmap(4, 4);
+        var prepared = service.CreateProtectedPng(BitmapHelper.ToBitmapSource(bitmap));
+        using (prepared.Protection)
+        {
+            _ = service.CreatePng(bitmap);
+            service.Cleanup();
+            Assert.True(File.Exists(prepared.Path));
+        }
+        service.Cleanup();
+        Assert.False(File.Exists(prepared.Path));
+    }
+
     private string CreateCacheFile(
         string suffix, int length, DateTimeOffset lastWriteTime)
     {

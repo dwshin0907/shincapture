@@ -19,7 +19,7 @@ public sealed class DragExportService
     private readonly int _maxFiles;
     private readonly long _maxBytes;
     private readonly object _sync = new();
-    private readonly HashSet<string> _protectedPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _protectedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public DragExportService(
         string? directory = null,
@@ -76,12 +76,25 @@ public sealed class DragExportService
             Cleanup(now, protectedPath: null);
     }
 
+    public (string Path, IDisposable Protection) CreateProtectedPng(BitmapSource source)
+    {
+        // Acquire the lease before another queued export can run cache cleanup.
+        lock (_sync)
+        {
+            string path = CreatePng(source);
+            return (path, Protect(path));
+        }
+    }
+
     public IDisposable Protect(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string fullPath = Path.GetFullPath(path);
         lock (_sync)
-            _protectedPaths.Add(fullPath);
+        {
+            _protectedPaths.TryGetValue(fullPath, out int leases);
+            _protectedPaths[fullPath] = leases + 1;
+        }
         return new ProtectedPathLease(this, fullPath);
     }
 
@@ -160,12 +173,16 @@ public sealed class DragExportService
 
     private bool IsProtected(string path, string? additionallyProtectedPath) =>
         PathsEqual(path, additionallyProtectedPath) ||
-        _protectedPaths.Contains(Path.GetFullPath(path));
+        _protectedPaths.ContainsKey(Path.GetFullPath(path));
 
     private void ReleaseProtection(string path)
     {
         lock (_sync)
-            _protectedPaths.Remove(path);
+        {
+            if (!_protectedPaths.TryGetValue(path, out int leases)) return;
+            if (leases > 1) _protectedPaths[path] = leases - 1;
+            else _protectedPaths.Remove(path);
+        }
     }
 
     private IEnumerable<string> SafeGetFiles(string pattern)
