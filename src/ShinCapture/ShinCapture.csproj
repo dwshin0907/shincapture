@@ -10,7 +10,7 @@
     <AssemblyName>ShinCapture</AssemblyName>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <RootNamespace>ShinCapture</RootNamespace>
-    <Version>1.3.18</Version>
+    <Version>1.3.19</Version>
     <Product>ShinCapture</Product>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -18,9 +18,9 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <!-- 용량 최적화 (~30-40% 절약). 압축은 첫 실행 시 한 번 풀림. -->
+    <!-- 실행 파일 용량을 줄인다. 관리 어셈블리 압축 해제는 실행마다 비용이 발생한다. -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <!-- ReadyToRun(미리 ngen)을 끄면 추가로 절약, 시작 1~2초 느려짐 트레이드 -->
+    <!-- ReadyToRun 사전 컴파일을 생략한다. 용량과 시작 시간의 차이는 별도 실측이 필요하다. -->
     <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
 
@@ -35,5 +35,14 @@
   <ItemGroup>
     <Resource Include="Assets\icon.ico" />
   </ItemGroup>
+
+  <!-- Only still-image processing is used. FFmpeg is an optional video-I/O
+       plugin; exclude it before the single-file bundle is assembled. -->
+  <Target Name="ExcludeUnusedOpenCvVideoRuntime" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="$([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

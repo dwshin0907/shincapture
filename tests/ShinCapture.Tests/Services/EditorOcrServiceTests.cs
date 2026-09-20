@@ -13,6 +13,30 @@ namespace ShinCapture.Tests.Services;
 public class EditorOcrServiceTests
 {
     [Fact]
+    public async Task ExtractAsync_PreservesPixelsUntilAsyncRecognitionCompletesThenDisposesBitmap()
+    {
+        var continueRecognition = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        System.Drawing.Bitmap? observed = null;
+        var source = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgr24, null,
+            new byte[] { 24, 80, 200 }, 3);
+        source.Freeze();
+        var service = CreateService(extractTextAsync: async (bitmap, _, _) =>
+        {
+            observed = bitmap;
+            await continueRecognition.Task;
+            Assert.Equal(System.Drawing.Color.FromArgb(200, 80, 24).ToArgb(), bitmap.GetPixel(0, 0).ToArgb());
+            return "recognized";
+        });
+
+        Task<EditorOcrResult> operation = service.ExtractAsync(source, new AppSettings());
+        Assert.NotNull(observed);
+        Assert.Equal(1, observed.Width);
+        continueRecognition.SetResult();
+        Assert.Equal(EditorOcrOutcome.Success, (await operation).Outcome);
+        Assert.Throws<ArgumentException>(() => observed.GetPixel(0, 0));
+    }
+
+    [Fact]
     public async Task ExtractAsync_WhenLanguagePackMissing_ReturnsLanguagePackMissing()
     {
         var service = CreateService(resolveLanguage: _ => null);

@@ -1,8 +1,8 @@
 using System;
 using System.Drawing;
-using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using ShinCapture.Helpers;
 using ShinCapture.Models;
 using ShinCapture.Services.Ai;
 
@@ -101,7 +101,7 @@ public sealed class EditorOcrService
                 };
             }
 
-            using var bitmap = BitmapSourceToBitmap(source);
+            using var bitmap = BitmapHelper.ToBitmap(source);
             var text = await _extractTextAsync(bitmap, langTag, settings.Ocr.UpscaleSmallImages);
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -188,15 +188,5 @@ public sealed class EditorOcrService
                 TargetLanguage = translation.TargetLanguage
             }
         };
-    }
-
-    private static Bitmap BitmapSourceToBitmap(BitmapSource source)
-    {
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(source));
-        using var stream = new MemoryStream();
-        encoder.Save(stream);
-        stream.Position = 0;
-        return new Bitmap(stream);
     }
 }
