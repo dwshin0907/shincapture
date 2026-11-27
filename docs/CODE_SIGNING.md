@@ -41,10 +41,10 @@ The Inno Setup-generated uninstaller is not separately signed by this pipeline.
 ## Release checks
 
 The maintainer explicitly authorized unsigned public releases of **v1.3.18 and
-v1.3.19** on 2026-09-20 while Foundation approval is pending. These versions are built and
+v1.3.19** on 2026-09-20, and of **v1.3.20** on 2026-11-27, while Foundation approval is pending. These versions are built and
 published manually with their unsigned status disclosed in the release notes and
 on the download page. Each includes SHA-256 checksums and must pass the test suite.
-These exceptions are limited to those two versions; they do not relax the production signing CI
+These exceptions are limited to those three versions; they do not relax the production signing CI
 or authorize unsigned fallback when signing fails. After approval, signed files
 will be published under a new version and tag, preserving existing assets.
 
