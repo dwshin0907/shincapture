@@ -86,8 +86,8 @@ JEV(`typesafe/jev-1.13-20260917`)에 기존 조항, 사용자 지시와 수정 �
 6. CI에서 앱 빌드 → 앱 서명·검증 → Inno Setup 패키징 → 설치 파일 서명·검증 → ZIP·SHA256SUMS 생성
 7. SignPath가 요청하는 앱·설치 파일 서명 승인을 처리하고, CI의 서명 검증 성공을 확인
 8. GitHub Release의 설치 파일·ZIP·SHA256SUMS를 확인하고, 내려받은 파일의 서명과 해시를 재검증
-9. 홈페이지 저장소 `C:\AI\NPC\homepage\ai-landing-page`의 `public/shincapture/index.html` 버전과 다운로드 링크 갱신
-10. 홈페이지 `npm run build` 후 `main` 푸시
+9. 홈페이지 저장소(`dwshin0907/wenvidia-homepage`, 로컬 `C:\AI\NPC\homepage\ai-landing-page`)에서 `git fetch` 후 최신 `origin/main`으로 새 worktree를 만든다. 로컬 `main`은 뒤처져 있을 수 있다. 2026-09-25 신툴즈 개편 이후 신캡쳐 버전·다운로드·릴리스·체크섬 링크와 용량은 `src/site.ts`의 `products.capture`에 있고, 같은 파일의 `productSeo`, `/downloads/` 설명, `pageUpdated`도 함께 갱신한다. `public/shincapture/index.html`은 더 이상 없다.
+10. 홈페이지 `npm run lint`, `npm run build`, `python scripts/verify-site.py` 통과 후 `main` 푸시
 11. 홈페이지의 `deploy-cloudflare-worker.yml`이 `naverlandingpage`를 배포하는지 확인
 12. 실제 홈페이지와 다운로드 URL을 확인
 
