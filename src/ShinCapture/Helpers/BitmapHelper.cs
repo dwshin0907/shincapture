@@ -112,6 +112,16 @@ public static class BitmapHelper
         return stream.ToArray();
     }
 
+    internal static byte[] EncodeClipboardDib(BitmapSource source)
+    {
+        using Bitmap raw = ToBitmap(source);
+        using Bitmap flat = FlattenAlphaToWhite(raw);
+        using var stream = new MemoryStream();
+        flat.Save(stream, ImageFormat.Bmp);
+        // CF_DIB starts with BITMAPINFOHEADER, not the 14-byte BMP file header.
+        return stream.ToArray()[14..];
+    }
+
     /// <summary>
     /// 클립보드에 이미지를 PNG + System.Drawing.Bitmap 듀얼로 등록한다.
     /// - PNG 형식: 포토샵/디스코드 등이 우선 인식 → 알파 채널 보존

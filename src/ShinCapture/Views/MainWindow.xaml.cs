@@ -409,7 +409,7 @@ public partial class MainWindow : Window
             bool shouldCopy = _settings.Save.CopyToClipboard ||
                               _settings.Capture.AfterCapture == AfterCaptureAction.ClipboardOnly;
             if (shouldCopy)
-                _ = ClipboardImageService.SetImageAsync(imageSource);
+                _ = CopyCaptureToClipboardAsync(imageSource);
 
             switch (_settings.Capture.AfterCapture)
             {
@@ -470,6 +470,28 @@ public partial class MainWindow : Window
                 $"mode={mode}, size={result.Region.Width}x{result.Region.Height}, " +
                 $"convert={convertedAtMs}ms, dispatch={stopwatch.ElapsedMilliseconds}ms");
         }
+    }
+
+    private async Task CopyCaptureToClipboardAsync(BitmapSource image)
+    {
+        try
+        {
+            ClipboardImageService.ClipboardImageResult result =
+                await ClipboardImageService.SetImageWithFileAsync(image);
+            // A newer queued capture can supersede this one without an error.
+            if (result.Success || result.Error == null || _isExiting) return;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Clipboard", "캡처 이미지 및 경로 복사 실패", ex);
+            if (_isExiting) return;
+        }
+
+        _trayIcon.ShowBalloonTip(
+            4000,
+            "신캡쳐 — 복사 실패",
+            "캡처 이미지와 파일 경로를 복사하지 못했습니다. 편집기에서 다시 복사해 주세요.",
+            ToolTipIcon.Warning);
     }
 
     private async void RunOcrAndNotify(System.Drawing.Bitmap image)
@@ -1014,6 +1036,7 @@ public partial class MainWindow : Window
             RunCleanupStep("Failed to hide the tray icon", () => _trayIcon.Visible = false);
             RunCleanupStep("Failed to dispose the tray icon", _trayIcon.Dispose);
             RunCleanupStep("Failed to dispose the hotkey manager", _hotkeyManager.Dispose);
+            RunCleanupStep("Failed to stop clipboard target detection", ClipboardImageService.Shutdown);
         }
         finally
         {

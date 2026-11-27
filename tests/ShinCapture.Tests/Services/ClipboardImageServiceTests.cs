@@ -20,7 +20,7 @@ public sealed class ClipboardImageServiceTests : IDisposable
     }
 
     [Fact]
-    public void EditorPackageContainsImageUnicodePathAndRawFileDropPath()
+    public void DefaultPackageContainsImageUnicodePathAndRawFileDropPath()
     {
         string path = Path.Combine(_tempDir, "편집 결과 이미지.png");
         File.WriteAllBytes(path, [1]);
@@ -57,11 +57,57 @@ public sealed class ClipboardImageServiceTests : IDisposable
     }
 
     [Fact]
+    public void ImageOnlyPackageHasNoTextOrFileFormatsEvenWithAutomaticConversion()
+    {
+        using var bitmap = new Bitmap(2, 1, PixelFormat.Format32bppArgb);
+        bitmap.SetPixel(0, 0, Color.FromArgb(0, 0, 0, 0));
+        bitmap.SetPixel(1, 0, Color.FromArgb(255, 17, 83, 201));
+        var source = BitmapHelper.ToBitmapSource(bitmap);
+
+        using BitmapHelper.ClipboardDataPackage package =
+            BitmapHelper.BuildClipboardDataPackage(source);
+        var data = package.DataObject;
+
+        Assert.True(data.GetDataPresent("PNG", autoConvert: false));
+        Assert.True(data.GetDataPresent(System.Windows.Forms.DataFormats.Bitmap, autoConvert: false));
+        foreach (string format in new[]
+        {
+            System.Windows.Forms.DataFormats.Text,
+            System.Windows.Forms.DataFormats.UnicodeText,
+            System.Windows.Forms.DataFormats.OemText,
+            System.Windows.Forms.DataFormats.StringFormat,
+            System.Windows.Forms.DataFormats.FileDrop
+        })
+        {
+            Assert.False(data.GetDataPresent(format, autoConvert: true), format);
+        }
+
+        var png = Assert.IsAssignableFrom<Stream>(data.GetData("PNG", autoConvert: false));
+        png.Position = 0;
+        using var decoded = new Bitmap(png);
+        Assert.Equal(0, decoded.GetPixel(0, 0).A);
+        Assert.Equal(Color.FromArgb(255, 17, 83, 201), decoded.GetPixel(1, 0));
+
+        var flat = Assert.IsType<Bitmap>(data.GetData(System.Windows.Forms.DataFormats.Bitmap, autoConvert: false));
+        Assert.Equal(Color.White.ToArgb(), flat.GetPixel(0, 0).ToArgb());
+        Assert.Equal(Color.FromArgb(255, 17, 83, 201), flat.GetPixel(1, 0));
+    }
+
+    [Fact]
     public void TerminalPathIsAlwaysQuotedForSafeDirectPaste()
     {
         string path = Path.Combine(Path.GetTempPath(), "shell&name.png");
 
         Assert.Equal($"\"{Path.GetFullPath(path)}\"", BitmapHelper.QuotePathForTerminal(path));
+    }
+
+    [Theory]
+    [InlineData("capture\nnext.png")]
+    [InlineData("capture\rnext.png")]
+    public void TerminalPathRejectsLineBreaks(string fileName)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            BitmapHelper.QuotePathForTerminal(Path.Combine(_tempDir, fileName)));
     }
 
     [Fact]

@@ -21,6 +21,14 @@ public static class ClipboardImageService
             "Temp",
             "Clipboard"));
     private static IDisposable? _latestExportLease;
+    private static long _generation;
+    private static readonly Lazy<AdaptiveImageClipboard> AdaptiveClipboard = new(
+        () => new AdaptiveImageClipboard(() => Interlocked.Read(ref _generation)));
+
+    public static void Shutdown()
+    {
+        if (AdaptiveClipboard.IsValueCreated) AdaptiveClipboard.Value.Dispose();
+    }
 
     static ClipboardImageService()
     {
@@ -53,6 +61,7 @@ public static class ClipboardImageService
 
         lock (Sync)
         {
+            long generation = Interlocked.Increment(ref _generation);
             while (Queue.Count >= MaxQueuedItems)
             {
                 WorkItem superseded = Queue.Dequeue();
@@ -60,7 +69,7 @@ public static class ClipboardImageService
                     new ClipboardImageResult(false, null, null));
             }
 
-            Queue.Enqueue(new WorkItem(frozenSource, includeFile, completion));
+            Queue.Enqueue(new WorkItem(frozenSource, includeFile, generation, completion));
             Monitor.Pulse(Sync);
         }
 
@@ -97,12 +106,12 @@ public static class ClipboardImageService
 
                 if (item.IncludeFile)
                 {
-                    filePath = ClipboardExporter.CreatePng(item.Source);
-                    newLease = ClipboardExporter.Protect(filePath);
-                    copied = BitmapHelper.TrySetClipboardPngWithFile(
-                        item.Source,
-                        filePath,
-                        out error);
+                    (filePath, newLease) = ClipboardExporter.CreateProtectedPng(item.Source);
+                    var payload = new ClipboardImagePayload(item.Source, filePath);
+                    ClipboardWriteResult publication = AdaptiveClipboard.Value
+                        .PublishAsync(payload, item.Generation).GetAwaiter().GetResult();
+                    copied = publication.Status == ClipboardWriteStatus.Published;
+                    error = publication.Error;
                 }
                 else
                 {
@@ -140,6 +149,7 @@ public static class ClipboardImageService
     private sealed record WorkItem(
         BitmapSource Source,
         bool IncludeFile,
+        long Generation,
         TaskCompletionSource<ClipboardImageResult> Completion);
 
     public sealed record ClipboardImageResult(

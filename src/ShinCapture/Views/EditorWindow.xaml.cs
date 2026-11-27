@@ -1813,9 +1813,10 @@ public partial class EditorWindow : Window
             miCopy.Click += async (_, _) =>
             {
                 StatusText.Text = "클립보드에 복사 중...";
-                bool copied = await CopyImageToClipboardAsync(localImg);
-                StatusText.Text = copied
-                    ? "클립보드에 복사됨"
+                ClipboardImageService.ClipboardImageResult result =
+                    await CopyImageAndPathToClipboardAsync(localImg);
+                StatusText.Text = result.Success
+                    ? "이미지와 파일 경로 복사됨"
                     : "클립보드에 복사하지 못했습니다";
             };
             ctx.Items.Add(miCopy);
@@ -2307,8 +2308,9 @@ public partial class EditorWindow : Window
         StatusText.Text = $"저장됨: {path}";
         if (_settings.Save.CopyToClipboard)
         {
-            bool copied = await CopyImageToClipboardAsync(renderedSource);
-            if (!copied) StatusText.Text = $"저장됨: {path} · 클립보드 복사 실패";
+            ClipboardImageService.ClipboardImageResult result =
+                await CopyImageAndPathToClipboardAsync(renderedSource);
+            if (!result.Success) StatusText.Text = $"저장됨: {path} · 클립보드 복사 실패";
         }
     }
 
@@ -2368,19 +2370,6 @@ public partial class EditorWindow : Window
         _objects.Any(item => item.IsVisible)
             ? EditorCompositeRenderer.RenderBitmapSource(_sourceImage, _objects)
             : _sourceImage;
-
-    private static async Task<bool> CopyImageToClipboardAsync(BitmapSource image)
-    {
-        try
-        {
-            return await ClipboardImageService.SetImageAsync(image);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write("Clipboard", "편집기 이미지 복사 실패", ex);
-            return false;
-        }
-    }
 
     private static async Task<ClipboardImageService.ClipboardImageResult>
         CopyImageAndPathToClipboardAsync(BitmapSource image)
